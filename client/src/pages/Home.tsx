@@ -6,7 +6,7 @@ import { MapView } from '@/components/Map';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ExternalLink, LocateFixed, Loader2, MapPin, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ExternalLink, LocateFixed, Loader2, MapPin, Navigation, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 
 type Area = 'すべて' | '京都市' | '大阪市' | '茨木市' | '高槻市';
 type GenreFilter = '飲食' | '美容' | 'コンビニ・スーパー' | '買い物' | '薬局・医療' | '暮らし' | '学び・余暇';
@@ -385,7 +385,16 @@ export default function Home() {
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Google Mapsで開く
               </a>
-              <Button onClick={() => setSelectedStore(null)} className="w-full bg-blue-600 hover:bg-blue-700 text-white">閉じる</Button>
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&origin=My+Location&destination=${encodeURIComponent(`${selectedStore.name} ${selectedStore.address}`)}&travelmode=walking`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex h-10 w-full items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <Navigation className="w-4 h-4 mr-2" />
+                現在地から徒歩で経路を開く
+              </a>
+              <Button onClick={() => setSelectedStore(null)} className="w-full bg-slate-700 hover:bg-slate-800 text-white">閉じる</Button>
             </div>
           </div>
         </div>
