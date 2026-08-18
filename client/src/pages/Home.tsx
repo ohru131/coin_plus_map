@@ -6,9 +6,10 @@ import { MapView } from '@/components/Map';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LocateFixed, Loader2, MapPin, Navigation, Search, X } from 'lucide-react';
+import { LocateFixed, Loader2, MapPin, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 
 type Area = 'すべて' | '京都市' | '大阪市' | '茨木市' | '高槻市';
+type GenreFilter = '飲食' | '美容' | 'コンビニ・スーパー' | '買い物' | '薬局・医療' | '暮らし' | '学び・余暇';
 
 interface Store {
   id: string;
@@ -37,11 +38,21 @@ const AREA_CENTERS: Record<Exclude<Area, 'すべて'>, google.maps.LatLngLiteral
 };
 const DEFAULT_CENTER = { lat: 34.842, lng: 135.62 };
 const LIST_LIMIT = 100;
+const GENRE_FILTERS: Array<{ id: GenreFilter; label: string; categories: string[] }> = [
+  { id: '飲食', label: '飲食', categories: ['飲食店（和食）', '飲食店（イタリアン・フレンチ・洋食）', '飲食店（カフェ・スイーツ）', '飲食店（居酒屋）', '飲食店（その他）'] },
+  { id: '美容', label: '美容', categories: ['美容院・理容店', 'ビューティー・リラク'] },
+  { id: 'コンビニ・スーパー', label: 'コンビニ・スーパー', categories: ['コンビニ・スーパー・デパート'] },
+  { id: '買い物', label: '買い物', categories: ['ショッピング', 'ファッション'] },
+  { id: '薬局・医療', label: '薬局・医療', categories: ['薬局', '医療・健康サービス'] },
+  { id: '暮らし', label: '暮らし', categories: ['住まい・暮らし', 'その他'] },
+  { id: '学び・余暇', label: '学び・余暇', categories: ['趣味・教育・習い事', 'レジャー・スポーツ・旅行'] },
+];
 
 export default function Home() {
   const [stores, setStores] = useState<Store[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArea, setSelectedArea] = useState<Area>('すべて');
+  const [selectedGenres, setSelectedGenres] = useState<Set<GenreFilter>>(() => new Set());
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,9 +87,12 @@ export default function Home() {
       const isInArea = selectedArea === 'すべて' || store.area === selectedArea;
       const isKeywordMatch = !keyword || [store.name, store.address, store.city, store.genre]
         .some((value) => value.toLocaleLowerCase('ja-JP').includes(keyword));
-      return isInArea && isKeywordMatch;
+      const isGenreMatch = selectedGenres.size === 0 || GENRE_FILTERS.some(
+        (genreFilter) => selectedGenres.has(genreFilter.id) && genreFilter.categories.includes(store.genre),
+      );
+      return isInArea && isKeywordMatch && isGenreMatch;
     });
-  }, [searchQuery, selectedArea, stores]);
+  }, [searchQuery, selectedArea, selectedGenres, stores]);
 
   const visibleStores = useMemo(() => filteredStores.slice(0, LIST_LIMIT), [filteredStores]);
 
@@ -86,6 +100,26 @@ export default function Home() {
     markersRef.current.forEach((marker) => marker.setMap(null));
     markersRef.current = [];
   }, []);
+
+  const toggleGenre = useCallback((genre: GenreFilter) => {
+    setSelectedGenres((previous) => {
+      const next = new Set(previous);
+      if (next.has(genre)) {
+        next.delete(genre);
+      } else {
+        next.add(genre);
+      }
+      return next;
+    });
+    setSelectedStore(null);
+    clearStoreMarkers();
+  }, [clearStoreMarkers]);
+
+  const clearGenres = useCallback(() => {
+    setSelectedGenres(new Set());
+    setSelectedStore(null);
+    clearStoreMarkers();
+  }, [clearStoreMarkers]);
 
   const showArea = useCallback((area: Area) => {
     setSelectedArea(area);
@@ -245,6 +279,45 @@ export default function Home() {
                 >
                   {AREA_OPTIONS.map((area) => <option key={area} value={area}>{area}</option>)}
                 </select>
+                <div className="pt-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
+                      ジャンル（複数選択）
+                    </label>
+                    {selectedGenres.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearGenres}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        選択解除
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11px] leading-4 text-gray-500">複数選択したジャンルのいずれかに該当する店舗を表示します。</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="ジャンルを複数選択">
+                    {GENRE_FILTERS.map((genreFilter) => {
+                      const isSelected = selectedGenres.has(genreFilter.id);
+                      return (
+                        <button
+                          key={genreFilter.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => toggleGenre(genreFilter.id)}
+                          className={`min-h-9 rounded-md border px-2 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                            isSelected
+                              ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                              : 'border-blue-200 bg-blue-50/60 text-blue-800 hover:border-blue-400 hover:bg-blue-100'
+                          }`}
+                        >
+                          {genreFilter.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <Button onClick={handleGetLocation} disabled={isLocating} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
                   {isLocating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LocateFixed className="w-4 h-4 mr-2" />}
                   現在地のエリアを表示
