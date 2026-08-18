@@ -94,6 +94,23 @@ export default function Home() {
     });
   }, [searchQuery, selectedArea, selectedGenres, stores]);
 
+  const storesMatchingAreaAndKeyword = useMemo(() => {
+    const keyword = searchQuery.trim().toLocaleLowerCase('ja-JP');
+    return stores.filter((store) => {
+      const isInArea = selectedArea === 'すべて' || store.area === selectedArea;
+      const isKeywordMatch = !keyword || [store.name, store.address, store.city, store.genre]
+        .some((value) => value.toLocaleLowerCase('ja-JP').includes(keyword));
+      return isInArea && isKeywordMatch;
+    });
+  }, [searchQuery, selectedArea, stores]);
+
+  const genreCounts = useMemo(() => new Map(
+    GENRE_FILTERS.map((genreFilter) => [
+      genreFilter.id,
+      storesMatchingAreaAndKeyword.filter((store) => genreFilter.categories.includes(store.genre)).length,
+    ]),
+  ), [storesMatchingAreaAndKeyword]);
+
   const visibleStores = useMemo(() => filteredStores.slice(0, LIST_LIMIT), [filteredStores]);
 
   const clearStoreMarkers = useCallback(() => {
@@ -296,7 +313,7 @@ export default function Home() {
                       </button>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] leading-4 text-gray-500">複数選択したジャンルのいずれかに該当する店舗を表示します。</p>
+                  <p className="mt-1 text-[11px] leading-4 text-gray-500">件数は現在のエリア・キーワード条件に連動します。複数選択したジャンルはいずれかに該当する店舗を表示します。</p>
                   <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="ジャンルを複数選択">
                     {GENRE_FILTERS.map((genreFilter) => {
                       const isSelected = selectedGenres.has(genreFilter.id);
@@ -312,7 +329,10 @@ export default function Home() {
                               : 'border-blue-200 bg-blue-50/60 text-blue-800 hover:border-blue-400 hover:bg-blue-100'
                           }`}
                         >
-                          {genreFilter.label}
+                          <span className="truncate">{genreFilter.label}</span>
+                          <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${isSelected ? 'bg-white/20 text-white' : 'bg-white text-blue-700'}`}>
+                            {genreCounts.get(genreFilter.id)?.toLocaleString() ?? 0}
+                          </span>
                         </button>
                       );
                     })}
