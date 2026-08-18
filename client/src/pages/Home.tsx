@@ -29,6 +29,14 @@ interface StoreDataset {
   stores: Store[];
 }
 
+interface StoreManifest {
+  schemaVersion: 1;
+  version: string;
+  updatedAt: string;
+  datasetPath: string;
+  sourceSnapshot: string;
+}
+
 const AREA_OPTIONS: Area[] = ['すべて', '京都市', '大阪市', '茨木市', '高槻市'];
 const AREA_CENTERS: Record<Exclude<Area, 'すべて'>, google.maps.LatLngLiteral> = {
   京都市: { lat: 35.0116, lng: 135.7681 },
@@ -38,6 +46,9 @@ const AREA_CENTERS: Record<Exclude<Area, 'すべて'>, google.maps.LatLngLiteral
 };
 const DEFAULT_CENTER = { lat: 34.842, lng: 135.62 };
 const LIST_LIMIT = 100;
+const STORE_MANIFEST_PATH = '/store-data-manifest.json';
+const STORE_CACHE_NAME = 'coinplus-store-dataset-v1';
+const LAST_MANIFEST_STORAGE_KEY = 'coinplus-store-last-manifest-v1';
 const GENRE_FILTERS: Array<{ id: GenreFilter; label: string; categories: string[] }> = [
   { id: '飲食', label: '飲食', categories: ['飲食店（和食）', '飲食店（イタリアン・フレンチ・洋食）', '飲食店（カフェ・スイーツ）', '飲食店（居酒屋）', '飲食店（その他）'] },
   { id: '美容', label: '美容', categories: ['美容院・理容店', 'ビューティー・リラク'] },
@@ -47,6 +58,74 @@ const GENRE_FILTERS: Array<{ id: GenreFilter; label: string; categories: string[
   { id: '暮らし', label: '暮らし', categories: ['住まい・暮らし', 'その他'] },
   { id: '学び・余暇', label: '学び・余暇', categories: ['趣味・教育・習い事', 'レジャー・スポーツ・旅行'] },
 ];
+
+function isStoreManifest(value: unknown): value is StoreManifest {
+  if (!value || typeof value !== 'object') return false;
+  const manifest = value as Partial<StoreManifest>;
+  return manifest.schemaVersion === 1
+    && typeof manifest.version === 'string'
+    && typeof manifest.updatedAt === 'string'
+    && typeof manifest.datasetPath === 'string'
+    && typeof manifest.sourceSnapshot === 'string';
+}
+
+function readSavedManifest(): StoreManifest | null {
+  try {
+    const value = window.localStorage.getItem(LAST_MANIFEST_STORAGE_KEY);
+    if (!value) return null;
+    const manifest: unknown = JSON.parse(value);
+    return isStoreManifest(manifest) ? manifest : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveManifest(manifest: StoreManifest) {
+  try {
+    window.localStorage.setItem(LAST_MANIFEST_STORAGE_KEY, JSON.stringify(manifest));
+  } catch {
+    // ストレージが無効な環境では、HTTPキャッシュのみで動作させる。
+  }
+}
+
+async function loadManifest(): Promise<{ manifest: StoreManifest; isFallback: boolean }> {
+  try {
+    const response = await fetch(STORE_MANIFEST_PATH, { cache: 'no-store' });
+    if (!response.ok) throw new Error('更新情報を取得できませんでした。');
+    const manifest: unknown = await response.json();
+    if (!isStoreManifest(manifest)) throw new Error('更新情報の形式が正しくありません。');
+    saveManifest(manifest);
+    return { manifest, isFallback: false };
+  } catch (error) {
+    const savedManifest = readSavedManifest();
+    if (savedManifest) return { manifest: savedManifest, isFallback: true };
+    throw error;
+  }
+}
+
+async function loadDataset(manifest: StoreManifest): Promise<StoreDataset> {
+  const request = new Request(manifest.datasetPath);
+  if (!('caches' in window)) {
+    const response = await fetch(request);
+    if (!response.ok) throw new Error('店舗データの読み込みに失敗しました。');
+    return response.json() as Promise<StoreDataset>;
+  }
+
+  const cache = await window.caches.open(STORE_CACHE_NAME);
+  const cachedResponse = await cache.match(request);
+  if (cachedResponse) return cachedResponse.json() as Promise<StoreDataset>;
+
+  const response = await fetch(request);
+  if (!response.ok) throw new Error('店舗データの読み込みに失敗しました。');
+  await cache.put(request, response.clone());
+
+  const cacheKeys = await cache.keys();
+  await Promise.all(cacheKeys
+    .filter((cacheKey) => cacheKey.url !== request.url)
+    .map((cacheKey) => cache.delete(cacheKey)));
+
+  return response.json() as Promise<StoreDataset>;
+}
 
 export default function Home() {
   const [stores, setStores] = useState<Store[]>([]);
@@ -65,20 +144,29 @@ export default function Home() {
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
   useEffect(() => {
-    fetch('/manus-storage/coinplus-stores-20260818_95baed87.json')
-      .then((response) => {
-        if (!response.ok) throw new Error('店舗データの読み込みに失敗しました。');
-        return response.json();
-      })
-      .then((data: StoreDataset) => {
+    let isMounted = true;
+
+    async function initializeStoreData() {
+      try {
+        // マニフェストは毎回確認し、バージョン付きデータはCache Storageから再利用する。
+        const { manifest, isFallback } = await loadManifest();
+        const data = await loadDataset(manifest);
+        if (!isMounted) return;
         setStores(data.stores);
         setSourceSnapshot(data.sourceSnapshot);
-      })
-      .catch((error: unknown) => {
+        if (isFallback) {
+          setLocationMessage('接続できないため、端末に保存された店舗データを表示しています。');
+        }
+      } catch (error: unknown) {
         console.error(error);
-        setLocationMessage('店舗データを読み込めませんでした。時間をおいて再度お試しください。');
-      })
-      .finally(() => setLoading(false));
+        if (isMounted) setLocationMessage('店舗データを読み込めませんでした。時間をおいて再度お試しください。');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    void initializeStoreData();
+    return () => { isMounted = false; };
   }, []);
 
   const filteredStores = useMemo(() => {
