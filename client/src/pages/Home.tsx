@@ -58,6 +58,28 @@ const GENRE_FILTERS: Array<{ id: GenreFilter; label: string; categories: string[
   { id: '暮らし', label: '暮らし', categories: ['住まい・暮らし', 'その他'] },
   { id: '学び・余暇', label: '学び・余暇', categories: ['趣味・教育・習い事', 'レジャー・スポーツ・旅行'] },
 ];
+const GENRE_PIN_COLORS: Record<GenreFilter, string> = {
+  飲食: '#E45745',
+  美容: '#C6518C',
+  'コンビニ・スーパー': '#159B68',
+  買い物: '#7357C8',
+  '薬局・医療': '#1674C5',
+  暮らし: '#9A702E',
+  '学び・余暇': '#CE7A1D',
+};
+
+function getGenreFilterForStore(store: Store): GenreFilter {
+  return GENRE_FILTERS.find((genreFilter) => genreFilter.categories.includes(store.genre))?.id ?? '暮らし';
+}
+
+function createGenrePinIcon(color: string): google.maps.Icon {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 34 42"><path d="M17 1.5C8.77 1.5 2.1 8.17 2.1 16.4c0 11.2 14.9 24.1 14.9 24.1s14.9-12.9 14.9-24.1C31.9 8.17 25.23 1.5 17 1.5Z" fill="${color}" stroke="white" stroke-width="2.4"/><circle cx="17" cy="16.2" r="5.1" fill="white"/></svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(30, 37),
+    anchor: new google.maps.Point(15, 37),
+  };
+}
 
 function isStoreManifest(value: unknown): value is StoreManifest {
   if (!value || typeof value !== 'object') return false;
@@ -137,11 +159,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [isLocating, setIsLocating] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isPinning, setIsPinning] = useState(false);
   const [locationMessage, setLocationMessage] = useState('');
   const [sourceSnapshot, setSourceSnapshot] = useState('');
-  const markersRef = useRef<google.maps.Marker[]>([]);
+  const resultMarkersRef = useRef<Map<string, google.maps.Marker>>(new Map());
+  const focusedMarkerRef = useRef<google.maps.Marker | null>(null);
   const userMarkerRef = useRef<google.maps.Marker | null>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+  const geocodeCacheRef = useRef<Map<string, google.maps.LatLngLiteral>>(new Map());
 
   useEffect(() => {
     let isMounted = true;
@@ -201,9 +226,14 @@ export default function Home() {
 
   const visibleStores = useMemo(() => filteredStores.slice(0, LIST_LIMIT), [filteredStores]);
 
-  const clearStoreMarkers = useCallback(() => {
-    markersRef.current.forEach((marker) => marker.setMap(null));
-    markersRef.current = [];
+  const clearResultMarkers = useCallback(() => {
+    resultMarkersRef.current.forEach((marker) => marker.setMap(null));
+    resultMarkersRef.current.clear();
+  }, []);
+
+  const clearFocusedMarker = useCallback(() => {
+    focusedMarkerRef.current?.setMap(null);
+    focusedMarkerRef.current = null;
   }, []);
 
   const toggleGenre = useCallback((genre: GenreFilter) => {
@@ -217,19 +247,19 @@ export default function Home() {
       return next;
     });
     setSelectedStore(null);
-    clearStoreMarkers();
-  }, [clearStoreMarkers]);
+    clearResultMarkers();
+  }, [clearResultMarkers]);
 
   const clearGenres = useCallback(() => {
     setSelectedGenres(new Set());
     setSelectedStore(null);
-    clearStoreMarkers();
-  }, [clearStoreMarkers]);
+    clearResultMarkers();
+  }, [clearResultMarkers]);
 
   const showArea = useCallback((area: Area) => {
     setSelectedArea(area);
     setSelectedStore(null);
-    clearStoreMarkers();
+    clearResultMarkers();
     if (!map) return;
     if (area === 'すべて') {
       map.setCenter(DEFAULT_CENTER);
@@ -238,9 +268,11 @@ export default function Home() {
     }
     map.setCenter(AREA_CENTERS[area]);
     map.setZoom(area === '大阪市' || area === '京都市' ? 11 : 13);
-  }, [clearStoreMarkers, map]);
+  }, [clearResultMarkers, map]);
 
   const geocodeStore = useCallback((store: Store): Promise<google.maps.LatLngLiteral> => {
+    const cachedPosition = geocodeCacheRef.current.get(store.id);
+    if (cachedPosition) return Promise.resolve(cachedPosition);
     return new Promise((resolve, reject) => {
       const geocoder = geocoderRef.current;
       if (!geocoder) {
@@ -250,7 +282,9 @@ export default function Home() {
       geocoder.geocode({ address: store.address }, (results, status) => {
         if (status === 'OK' && results?.[0]) {
           const location = results[0].geometry.location;
-          resolve({ lat: location.lat(), lng: location.lng() });
+          const position = { lat: location.lat(), lng: location.lng() };
+          geocodeCacheRef.current.set(store.id, position);
+          resolve(position);
           return;
         }
         reject(new Error(`住所を地図上で特定できませんでした（${status}）。`));
@@ -266,16 +300,22 @@ export default function Home() {
       return;
     }
     setIsGeocoding(true);
-    clearStoreMarkers();
+    clearFocusedMarker();
     try {
       const position = await geocodeStore(store);
-      const marker = new google.maps.Marker({
-        position,
-        map,
-        title: store.name,
-      });
-      marker.addListener('click', () => setSelectedStore(store));
-      markersRef.current = [marker];
+      const resultMarker = resultMarkersRef.current.get(store.id);
+      if (resultMarker) {
+        resultMarker.setAnimation(google.maps.Animation.BOUNCE);
+        window.setTimeout(() => resultMarker.setAnimation(null), 700);
+      } else {
+        focusedMarkerRef.current = new google.maps.Marker({
+          position,
+          map,
+          title: store.name,
+          icon: createGenrePinIcon(GENRE_PIN_COLORS[getGenreFilterForStore(store)]),
+          zIndex: 1000,
+        });
+      }
       map.setCenter(position);
       map.setZoom(17);
     } catch (error) {
@@ -284,7 +324,7 @@ export default function Home() {
     } finally {
       setIsGeocoding(false);
     }
-  }, [clearStoreMarkers, geocodeStore, map]);
+  }, [clearFocusedMarker, geocodeStore, map]);
 
   const resolveCurrentArea = useCallback((position: google.maps.LatLngLiteral) => {
     const geocoder = geocoderRef.current;
@@ -343,6 +383,51 @@ export default function Home() {
     mapInstance.setCenter(DEFAULT_CENTER);
     mapInstance.setZoom(10);
   }, []);
+
+  useEffect(() => {
+    if (!map || !geocoderRef.current) return;
+
+    let isCancelled = false;
+    clearResultMarkers();
+    clearFocusedMarker();
+    setIsPinning(visibleStores.length > 0);
+
+    async function createResultPins() {
+      let nextIndex = 0;
+      const workerCount = Math.min(3, visibleStores.length);
+      const workers = Array.from({ length: workerCount }, async () => {
+        while (!isCancelled) {
+          const store = visibleStores[nextIndex];
+          nextIndex += 1;
+          if (!store) return;
+          try {
+            const position = await geocodeStore(store);
+            if (isCancelled) return;
+            const genre = getGenreFilterForStore(store);
+            const marker = new google.maps.Marker({
+              position,
+              map,
+              title: `${store.name}（${genre}）`,
+              icon: createGenrePinIcon(GENRE_PIN_COLORS[genre]),
+            });
+            marker.addListener('click', () => setSelectedStore(store));
+            resultMarkersRef.current.set(store.id, marker);
+            await new Promise((resolve) => window.setTimeout(resolve, 60));
+          } catch (error) {
+            console.warn('店舗ピンを表示できませんでした。', store.id, error);
+          }
+        }
+      });
+      await Promise.all(workers);
+      if (!isCancelled) setIsPinning(false);
+    }
+
+    void createResultPins();
+    return () => {
+      isCancelled = true;
+      clearResultMarkers();
+    };
+  }, [clearFocusedMarker, clearResultMarkers, geocodeStore, map, visibleStores]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex flex-col">
@@ -466,6 +551,16 @@ export default function Home() {
               <CardContent className="p-0 h-full relative">
                 <MapView onMapReady={handleMapReady} className="w-full h-full rounded-lg" initialZoom={10} initialCenter={DEFAULT_CENTER} />
                 {isGeocoding && <div className="absolute top-3 left-3 z-10 bg-white/95 shadow rounded-md px-3 py-2 text-xs text-blue-700 flex items-center"><Loader2 className="w-4 h-4 mr-2 animate-spin" />店舗を地図に表示中</div>}
+                <div className="absolute top-3 right-3 z-10 max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800"><MapPin className="w-3.5 h-3.5 text-blue-600" />リスト表示中の{visibleStores.length}件をピン表示</p>
+                  {isPinning && <p className="mt-1 flex items-center gap-1 text-[11px] text-blue-700"><Loader2 className="w-3 h-3 animate-spin" />住所からピンを作成中</p>}
+                </div>
+                <div className="absolute bottom-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm" aria-label="ピンのジャンル別凡例">
+                  <p className="mb-1 text-[10px] font-semibold tracking-wide text-slate-500">ジャンル別ピン</p>
+                  <div className="flex max-w-[310px] flex-wrap gap-x-2.5 gap-y-1">
+                    {GENRE_FILTERS.map((genreFilter) => <span key={genreFilter.id} className="flex items-center gap-1 text-[10px] text-slate-700"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: GENRE_PIN_COLORS[genreFilter.id] }} />{genreFilter.label}</span>)}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </section>
