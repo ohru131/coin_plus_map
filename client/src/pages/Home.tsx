@@ -2,6 +2,7 @@
  * Design: 明快な白地とCOIN+ブルーで、モバイルでも現在地・エリア・個別店舗を迷わず辿れる地理検索画面。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MarkerClusterer } from '@googlemaps/markerclusterer';
 import { MapView } from '@/components/Map';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,6 +80,40 @@ function createGenrePinIcon(color: string): google.maps.Icon {
     scaledSize: new google.maps.Size(30, 37),
     anchor: new google.maps.Point(15, 37),
   };
+}
+
+function isPositionInBounds(position: google.maps.LatLngLiteral, bounds: google.maps.LatLngBoundsLiteral) {
+  const isLatitudeInBounds = position.lat >= bounds.south && position.lat <= bounds.north;
+  const isLongitudeInBounds = bounds.west <= bounds.east
+    ? position.lng >= bounds.west && position.lng <= bounds.east
+    : position.lng >= bounds.west || position.lng <= bounds.east;
+  return isLatitudeInBounds && isLongitudeInBounds;
+}
+
+function createStoreInfoContent(store: Store, genre: GenreFilter, onShowDetails: () => void) {
+  const container = document.createElement('div');
+  container.style.cssText = 'min-width:190px;max-width:240px;padding:2px 1px;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+
+  const title = document.createElement('p');
+  title.textContent = store.name;
+  title.style.cssText = 'margin:0 0 5px;color:#172033;font-size:14px;font-weight:700;line-height:1.35;';
+
+  const category = document.createElement('p');
+  category.textContent = genre;
+  category.style.cssText = `margin:0 0 6px;color:${GENRE_PIN_COLORS[genre]};font-size:12px;font-weight:700;`;
+
+  const address = document.createElement('p');
+  address.textContent = store.address;
+  address.style.cssText = 'margin:0 0 9px;color:#4a5568;font-size:11px;line-height:1.45;';
+
+  const detailButton = document.createElement('button');
+  detailButton.type = 'button';
+  detailButton.textContent = '店舗詳細を見る';
+  detailButton.style.cssText = 'border:0;border-radius:5px;background:#2563eb;color:#fff;padding:6px 9px;font-size:12px;font-weight:700;cursor:pointer;';
+  detailButton.addEventListener('click', onShowDetails);
+
+  container.append(title, category, address, detailButton);
+  return container;
 }
 
 function isStoreManifest(value: unknown): value is StoreManifest {
@@ -162,10 +197,14 @@ export default function Home() {
   const [isPinning, setIsPinning] = useState(false);
   const [locationMessage, setLocationMessage] = useState('');
   const [sourceSnapshot, setSourceSnapshot] = useState('');
+  const [mapBounds, setMapBounds] = useState<google.maps.LatLngBoundsLiteral | null>(null);
+  const [geocodeRevision, setGeocodeRevision] = useState(0);
   const resultMarkersRef = useRef<Map<string, google.maps.Marker>>(new Map());
+  const markerClustererRef = useRef<MarkerClusterer | null>(null);
   const focusedMarkerRef = useRef<google.maps.Marker | null>(null);
   const userMarkerRef = useRef<google.maps.Marker | null>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
   const geocodeCacheRef = useRef<Map<string, google.maps.LatLngLiteral>>(new Map());
 
   useEffect(() => {
@@ -224,11 +263,22 @@ export default function Home() {
     ]),
   ), [storesMatchingAreaAndKeyword]);
 
-  const visibleStores = useMemo(() => filteredStores.slice(0, LIST_LIMIT), [filteredStores]);
+  const mapPinStores = useMemo(() => filteredStores.slice(0, LIST_LIMIT), [filteredStores]);
+
+  const visibleStores = useMemo(() => {
+    if (!mapBounds || geocodeRevision === 0) return mapPinStores;
+    return mapPinStores.filter((store) => {
+      const position = geocodeCacheRef.current.get(store.id);
+      return position ? isPositionInBounds(position, mapBounds) : true;
+    });
+  }, [geocodeRevision, mapBounds, mapPinStores]);
 
   const clearResultMarkers = useCallback(() => {
+    markerClustererRef.current?.clearMarkers();
+    markerClustererRef.current = null;
     resultMarkersRef.current.forEach((marker) => marker.setMap(null));
     resultMarkersRef.current.clear();
+    infoWindowRef.current?.close();
   }, []);
 
   const clearFocusedMarker = useCallback(() => {
@@ -380,9 +430,24 @@ export default function Home() {
   const handleMapReady = useCallback((mapInstance: google.maps.Map) => {
     setMap(mapInstance);
     geocoderRef.current = new google.maps.Geocoder();
+    infoWindowRef.current = new google.maps.InfoWindow();
     mapInstance.setCenter(DEFAULT_CENTER);
     mapInstance.setZoom(10);
   }, []);
+
+  useEffect(() => {
+    if (!map) return;
+    const updateMapBounds = () => {
+      const bounds = map.getBounds();
+      if (!bounds) return;
+      const northEast = bounds.getNorthEast();
+      const southWest = bounds.getSouthWest();
+      setMapBounds({ north: northEast.lat(), east: northEast.lng(), south: southWest.lat(), west: southWest.lng() });
+    };
+    updateMapBounds();
+    const idleListener = map.addListener('idle', updateMapBounds);
+    return () => idleListener.remove();
+  }, [map]);
 
   useEffect(() => {
     if (!map || !geocoderRef.current) return;
@@ -390,14 +455,14 @@ export default function Home() {
     let isCancelled = false;
     clearResultMarkers();
     clearFocusedMarker();
-    setIsPinning(visibleStores.length > 0);
+    setIsPinning(mapPinStores.length > 0);
 
     async function createResultPins() {
       let nextIndex = 0;
-      const workerCount = Math.min(3, visibleStores.length);
+      const workerCount = Math.min(2, mapPinStores.length);
       const workers = Array.from({ length: workerCount }, async () => {
         while (!isCancelled) {
-          const store = visibleStores[nextIndex];
+          const store = mapPinStores[nextIndex];
           nextIndex += 1;
           if (!store) return;
           try {
@@ -406,20 +471,26 @@ export default function Home() {
             const genre = getGenreFilterForStore(store);
             const marker = new google.maps.Marker({
               position,
-              map,
               title: `${store.name}（${genre}）`,
               icon: createGenrePinIcon(GENRE_PIN_COLORS[genre]),
             });
-            marker.addListener('click', () => setSelectedStore(store));
+            marker.addListener('click', () => {
+              infoWindowRef.current?.setContent(createStoreInfoContent(store, genre, () => setSelectedStore(store)));
+              infoWindowRef.current?.open({ map, anchor: marker, shouldFocus: false });
+            });
             resultMarkersRef.current.set(store.id, marker);
-            await new Promise((resolve) => window.setTimeout(resolve, 60));
+            await new Promise((resolve) => window.setTimeout(resolve, 120));
           } catch (error) {
             console.warn('店舗ピンを表示できませんでした。', store.id, error);
           }
         }
       });
       await Promise.all(workers);
-      if (!isCancelled) setIsPinning(false);
+      if (!isCancelled) {
+        markerClustererRef.current = new MarkerClusterer({ map, markers: Array.from(resultMarkersRef.current.values()) });
+        setGeocodeRevision((revision) => revision + 1);
+        setIsPinning(false);
+      }
     }
 
     void createResultPins();
@@ -427,7 +498,7 @@ export default function Home() {
       isCancelled = true;
       clearResultMarkers();
     };
-  }, [clearFocusedMarker, clearResultMarkers, geocodeStore, map, visibleStores]);
+  }, [clearFocusedMarker, clearResultMarkers, geocodeStore, map, mapPinStores]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex flex-col">
@@ -521,8 +592,8 @@ export default function Home() {
 
             <Card className="shadow-md border-0 flex-1 flex flex-col">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">店舗一覧 <span className="text-sm font-normal text-gray-500">({filteredStores.length.toLocaleString()}件)</span></CardTitle>
-                {filteredStores.length > LIST_LIMIT && <p className="text-xs text-gray-500 pt-1">検索結果の先頭{LIST_LIMIT}件を表示しています。キーワードでさらに絞り込めます。</p>}
+                <CardTitle className="text-lg">店舗一覧 <span className="text-sm font-normal text-gray-500">(地図範囲内 {visibleStores.length.toLocaleString()}件)</span></CardTitle>
+                {filteredStores.length > LIST_LIMIT && <p className="text-xs text-gray-500 pt-1">検索結果の先頭{LIST_LIMIT}件を地図に表示しています。地図を動かすと一覧も更新されます。</p>}
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden flex flex-col">
                 <div className="space-y-2 overflow-y-auto flex-1 pr-2 max-h-[52vh] lg:max-h-[calc(100vh-315px)]">
@@ -552,7 +623,8 @@ export default function Home() {
                 <MapView onMapReady={handleMapReady} className="w-full h-full rounded-lg" initialZoom={10} initialCenter={DEFAULT_CENTER} />
                 {isGeocoding && <div className="absolute top-3 left-3 z-10 bg-white/95 shadow rounded-md px-3 py-2 text-xs text-blue-700 flex items-center"><Loader2 className="w-4 h-4 mr-2 animate-spin" />店舗を地図に表示中</div>}
                 <div className="absolute top-3 right-3 z-10 max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800"><MapPin className="w-3.5 h-3.5 text-blue-600" />リスト表示中の{visibleStores.length}件をピン表示</p>
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800"><MapPin className="w-3.5 h-3.5 text-blue-600" />検索結果の{mapPinStores.length}件をピン表示</p>
+                  <p className="mt-1 text-[11px] text-slate-600">地図範囲内: {visibleStores.length}件</p>
                   {isPinning && <p className="mt-1 flex items-center gap-1 text-[11px] text-blue-700"><Loader2 className="w-3 h-3 animate-spin" />住所からピンを作成中</p>}
                 </div>
                 <div className="absolute bottom-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm" aria-label="ピンのジャンル別凡例">
