@@ -104,5 +104,5 @@
 
 - [x] 既存のPagesデプロイワークフローの起動条件とデータ更新処理を確認する。
 - [x] `main`へのpushで実行されるAPIキー不要のデプロイ設定へ更新する。
-- [ ] ワークフロー構文を検証し、GitHubへ同期する。
-- [ ] 自動実行されたActionsとGitHub Pagesの公開URLを確認する。
+- [x] ワークフロー構文を検証し、GitHubへ同期する。
+- [x] 自動実行されたActionsとGitHub Pagesの公開URLを確認する。
