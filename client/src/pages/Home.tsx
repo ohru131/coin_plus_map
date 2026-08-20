@@ -13,6 +13,8 @@ import { CircleMarker, Marker, Popup } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { divIcon, type LatLngBounds, type Map as LeafletMap } from "leaflet";
 import { MapView } from "@/components/Map";
+import { useStoreTiles } from "@/hooks/useStoreTiles";
+import type { TileStore } from "@/lib/storeTiles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,36 +43,7 @@ type GenreFilter =
   | "学び・余暇";
 type Coordinates = [number, number];
 
-interface Store {
-  id: string;
-  name: string;
-  address: string;
-  prefecture: string;
-  city: string;
-  area: Exclude<Area, "すべて">;
-  genre: string;
-  categoryId: string;
-  latitude?: number;
-  longitude?: number;
-  geocodeLevel?: number;
-  openingHours?: string;
-  website?: string;
-}
-
-interface StoreDataset {
-  source: string;
-  sourceSnapshot: string;
-  scope: Exclude<Area, "すべて">[];
-  stores: Store[];
-}
-
-interface StoreManifest {
-  schemaVersion: 1;
-  version: string;
-  updatedAt: string;
-  datasetPath: string;
-  sourceSnapshot: string;
-}
+type Store = TileStore;
 
 interface GsiAddressFeature {
   geometry?: { coordinates?: [number, number] };
@@ -105,9 +78,6 @@ const LIST_PAGE_SIZE = 100;
 const PIN_INITIAL_BATCH_SIZE = 300;
 const PIN_BATCH_SIZE = 450;
 const PIN_BATCH_DELAY_MS = 45;
-const STORE_MANIFEST_PATH = `${import.meta.env.BASE_URL}store-data-manifest.json`;
-const STORE_CACHE_NAME = "coinplus-store-dataset-v1";
-const LAST_MANIFEST_STORAGE_KEY = "coinplus-store-last-manifest-v1";
 const COORDINATE_CACHE_STORAGE_KEY = "coinplus-store-coordinate-cache-v1";
 const GSI_ADDRESS_SEARCH_URL =
   "https://msearch.gsi.go.jp/address-search/AddressSearch";
@@ -216,40 +186,6 @@ const GENRE_PIN_ICONS: Record<
   "学び・余暇": createGenrePinIcon(GENRE_PIN_COLORS["学び・余暇"]),
 };
 
-function isStoreManifest(value: unknown): value is StoreManifest {
-  if (!value || typeof value !== "object") return false;
-  const manifest = value as Partial<StoreManifest>;
-  return (
-    manifest.schemaVersion === 1 &&
-    typeof manifest.version === "string" &&
-    typeof manifest.updatedAt === "string" &&
-    typeof manifest.datasetPath === "string" &&
-    typeof manifest.sourceSnapshot === "string"
-  );
-}
-
-function readSavedManifest(): StoreManifest | null {
-  try {
-    const value = window.localStorage.getItem(LAST_MANIFEST_STORAGE_KEY);
-    if (!value) return null;
-    const manifest: unknown = JSON.parse(value);
-    return isStoreManifest(manifest) ? manifest : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveManifest(manifest: StoreManifest) {
-  try {
-    window.localStorage.setItem(
-      LAST_MANIFEST_STORAGE_KEY,
-      JSON.stringify(manifest)
-    );
-  } catch {
-    // ストレージが無効な環境では、HTTPキャッシュのみで動作させる。
-  }
-}
-
 function readCoordinateCache(): Map<string, Coordinates> {
   try {
     const savedValue = window.localStorage.getItem(
@@ -300,49 +236,6 @@ function findAreaForPosition([latitude, longitude]: Coordinates): Exclude<
         longitude <= bounds.east
     )?.area ?? null
   );
-}
-
-async function loadManifest(): Promise<{
-  manifest: StoreManifest;
-  isFallback: boolean;
-}> {
-  try {
-    const response = await fetch(STORE_MANIFEST_PATH, { cache: "no-store" });
-    if (!response.ok) throw new Error("更新情報を取得できませんでした。");
-    const manifest: unknown = await response.json();
-    if (!isStoreManifest(manifest))
-      throw new Error("更新情報の形式が正しくありません。");
-    saveManifest(manifest);
-    return { manifest, isFallback: false };
-  } catch (error) {
-    const savedManifest = readSavedManifest();
-    if (savedManifest) return { manifest: savedManifest, isFallback: true };
-    throw error;
-  }
-}
-
-async function loadDataset(manifest: StoreManifest): Promise<StoreDataset> {
-  const request = new Request(manifest.datasetPath);
-  if (!("caches" in window)) {
-    const response = await fetch(request);
-    if (!response.ok) throw new Error("店舗データの読み込みに失敗しました。");
-    return response.json() as Promise<StoreDataset>;
-  }
-
-  const cache = await window.caches.open(STORE_CACHE_NAME);
-  const cachedResponse = await cache.match(request);
-  if (cachedResponse) return cachedResponse.json() as Promise<StoreDataset>;
-
-  const response = await fetch(request);
-  if (!response.ok) throw new Error("店舗データの読み込みに失敗しました。");
-  await cache.put(request, response.clone());
-  const cacheKeys = await cache.keys();
-  await Promise.all(
-    cacheKeys
-      .filter(cacheKey => cacheKey.url !== request.url)
-      .map(cacheKey => cache.delete(cacheKey))
-  );
-  return response.json() as Promise<StoreDataset>;
 }
 
 function isPositionInBounds(position: Coordinates, bounds: LatLngBounds) {
@@ -464,7 +357,6 @@ function useMediaQuery(query: string) {
 }
 
 export default function Home() {
-  const [stores, setStores] = useState<Store[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedArea, setSelectedArea] = useState<Area>("すべて");
   const [selectedGenres, setSelectedGenres] = useState<Set<GenreFilter>>(
@@ -478,7 +370,6 @@ export default function Home() {
     () => new Map()
   );
   const [userPosition, setUserPosition] = useState<Coordinates | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isLocating, setIsLocating] = useState(false);
   const [locationMessage, setLocationMessage] = useState("");
   const [mobileLegendOpen, setMobileLegendOpen] = useState(false);
@@ -492,57 +383,42 @@ export default function Home() {
   const locationRequestedRef = useRef(false);
   const storeExtraInfoCacheRef = useRef<Map<string, StoreExtraInfo>>(new Map());
   const isMobile = useMediaQuery("(max-width: 639px)");
+  const {
+    stores,
+    summary,
+    overviewTiles,
+    isLoading: loading,
+    isLoadingTiles,
+    message: tileMessage,
+  } = useStoreTiles({
+    mapBounds,
+    mapZoom: map?.getZoom() ?? 10,
+    listedBounds,
+    searchQuery,
+  });
 
   useEffect(() => {
-    let isMounted = true;
-    async function initializeStoreData() {
-      try {
-        const { manifest, isFallback } = await loadManifest();
-        const data = await loadDataset(manifest);
-        if (!isMounted) return;
-        setStores(data.stores);
-        const savedCoordinates = readCoordinateCache();
-        const embeddedCoordinates = new Map<string, Coordinates>();
-        for (const store of data.stores) {
-          if (
-            typeof store.latitude === "number" &&
-            Number.isFinite(store.latitude) &&
-            typeof store.longitude === "number" &&
-            Number.isFinite(store.longitude)
-          ) {
-            embeddedCoordinates.set(store.id, [
-              store.latitude,
-              store.longitude,
-            ]);
-          }
-        }
-        coordinateCacheRef.current = savedCoordinates;
-        setCoordinates(
-          new Map(
-            Array.from(embeddedCoordinates.entries()).concat(
-              Array.from(savedCoordinates.entries())
-            )
-          )
-        );
-        if (isFallback)
-          setLocationMessage(
-            "接続できないため、端末に保存された店舗データを表示しています。"
-          );
-      } catch (error) {
-        console.error(error);
-        if (isMounted)
-          setLocationMessage(
-            "店舗データを読み込めませんでした。時間をおいて再度お試しください。"
-          );
-      } finally {
-        if (isMounted) setLoading(false);
-      }
+    const savedCoordinates = readCoordinateCache();
+    const embeddedCoordinates = new Map<string, Coordinates>();
+    for (const store of stores) {
+      embeddedCoordinates.set(store.id, [store.latitude, store.longitude]);
     }
-    void initializeStoreData();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    for (const [id, position] of Array.from(savedCoordinates.entries())) {
+      coordinateCacheRef.current.set(id, position);
+    }
+    setCoordinates(
+      previous =>
+        new Map(
+          Array.from(previous.entries())
+            .concat(Array.from(embeddedCoordinates.entries()))
+            .concat(Array.from(savedCoordinates.entries()))
+        )
+    );
+  }, [stores]);
+
+  useEffect(() => {
+    if (tileMessage) setLocationMessage(tileMessage);
+  }, [tileMessage]);
 
   const filteredStores = useMemo(() => {
     const keyword = searchQuery.trim().toLocaleLowerCase("ja-JP");
@@ -578,18 +454,32 @@ export default function Home() {
     });
   }, [searchQuery, selectedArea, stores]);
 
-  const genreCounts = useMemo(
-    () =>
-      new Map(
+  const genreCounts = useMemo(() => {
+    const keyword = searchQuery.trim();
+    if (summary && !keyword) {
+      const sourceCounts =
+        selectedArea === "すべて"
+          ? summary.genreCounts
+          : (summary.areaGenreCounts[selectedArea] ?? {});
+      return new Map(
         GENRE_FILTERS.map(genreFilter => [
           genreFilter.id,
-          storesMatchingAreaAndKeyword.filter(store =>
-            genreFilter.categories.includes(store.genre)
-          ).length,
+          genreFilter.categories.reduce(
+            (total, category) => total + (sourceCounts[category] ?? 0),
+            0
+          ),
         ])
-      ),
-    [storesMatchingAreaAndKeyword]
-  );
+      );
+    }
+    return new Map(
+      GENRE_FILTERS.map(genreFilter => [
+        genreFilter.id,
+        storesMatchingAreaAndKeyword.filter(store =>
+          genreFilter.categories.includes(store.genre)
+        ).length,
+      ])
+    );
+  }, [searchQuery, selectedArea, storesMatchingAreaAndKeyword, summary]);
   const prioritizedStores = useMemo(() => {
     if (!userPosition) return filteredStores;
     return [...filteredStores].sort((first, second) => {
@@ -618,6 +508,11 @@ export default function Home() {
   );
   const deferredMapBounds = useDeferredValue(mapBounds);
   const mapZoom = map?.getZoom() ?? 10;
+  const isOverviewMode = mapZoom < 12;
+  const overviewStoreCount = useMemo(
+    () => overviewTiles.reduce((total, tile) => total + tile.count, 0),
+    [overviewTiles]
+  );
   const candidatePinStores = useMemo(() => {
     if (!deferredMapBounds) return coordinateStores;
     const bufferedBounds = deferredMapBounds.pad(0.25);
@@ -631,8 +526,11 @@ export default function Home() {
     getPinRenderBudget(mapZoom)
   );
   const mapPinStores = useMemo(
-    () => candidatePinStores.slice(0, renderedPinCount),
-    [candidatePinStores, renderedPinCount]
+    () =>
+      mapZoom < 12
+        ? []
+        : candidatePinStores.slice(0, renderedPinCount),
+    [candidatePinStores, mapZoom, renderedPinCount]
   );
   const isPinRendering = renderedPinCount < pinRenderTarget;
   const hasDeferredPins = candidatePinStores.length > pinRenderTarget;
@@ -645,7 +543,7 @@ export default function Home() {
     });
   }, [coordinateStores, coordinates, listedBounds, mapBounds]);
   const hasUnappliedMapBounds = Boolean(
-    mapBounds && listedBounds && !mapBounds.equals(listedBounds)
+    mapBounds && (!listedBounds || !mapBounds.equals(listedBounds))
   );
   const displayedStores = useMemo(
     () => visibleStores.slice(0, listPageSize),
@@ -680,10 +578,6 @@ export default function Home() {
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
     };
   }, [candidatePinStores, pinRenderTarget]);
-
-  useEffect(() => {
-    if (!listedBounds && mapBounds) setListedBounds(mapBounds);
-  }, [listedBounds, mapBounds]);
 
   const geocodeStore = useCallback(
     async (store: Store): Promise<Coordinates> => {
@@ -1021,6 +915,30 @@ export default function Home() {
                   onMapReady={setMap}
                   onBoundsChange={setMapBounds}
                 >
+                  {(map?.getZoom() ?? 10) < 12 &&
+                    overviewTiles.map(tile => (
+                      <CircleMarker
+                        key={`overview-${tile.z}-${tile.x}-${tile.y}`}
+                        center={tile.center}
+                        radius={Math.min(26, 10 + Math.sqrt(tile.count) / 5)}
+                        pathOptions={{
+                          color: "#ffffff",
+                          fillColor: "#2563eb",
+                          fillOpacity: 0.78,
+                          weight: 2,
+                        }}
+                        eventHandlers={{
+                          click: () => map?.flyTo(tile.center, 12),
+                        }}
+                      >
+                        {!isMobile && (
+                          <Popup>
+                            この地域に{tile.count.toLocaleString()}
+                            件のCOIN+利用可能店舗があります。拡大すると店舗を表示します。
+                          </Popup>
+                        )}
+                      </CircleMarker>
+                    ))}
                   <MarkerClusterGroup
                     chunkedLoading
                     chunkInterval={100}
@@ -1111,25 +1029,36 @@ export default function Home() {
                   <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
                     <MapPin className="w-3.5 h-3.5 text-blue-600" />
                     <span className="sm:hidden">
-                      {mapPinStores.length.toLocaleString()}件
+                      {isOverviewMode
+                        ? `${overviewTiles.length}地域`
+                        : `${mapPinStores.length.toLocaleString()}件`}
                     </span>
                     <span className="hidden sm:inline">
-                      {mapPinStores.length.toLocaleString()} /{" "}
-                      {candidatePinStores.length.toLocaleString()}件を描画
+                      {isOverviewMode
+                        ? `${overviewTiles.length}地域・${overviewStoreCount.toLocaleString()}件を集約表示`
+                        : `${mapPinStores.length.toLocaleString()} / ${candidatePinStores.length.toLocaleString()}件を描画`}
                     </span>
                   </p>
                   <p className="mt-1 hidden text-[11px] text-slate-600 sm:block">
                     一覧表示中: {visibleStores.length}件
                   </p>
+                  {isLoadingTiles && (
+                    <p className="mt-1 hidden items-center gap-1 text-[10px] text-blue-700 sm:flex">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      表示範囲の店舗を取得中
+                    </p>
+                  )}
                   {userPosition && (
                     <p className="mt-1 hidden text-[11px] font-medium text-blue-700 sm:block">
                       現在地周辺を優先表示中
                     </p>
                   )}
                   <p className="mt-1 hidden text-[10px] text-slate-500 sm:block">
-                    表示範囲に応じて段階描画
+                    {isOverviewMode
+                      ? "拡大するとジャンル別の店舗ピンを表示"
+                      : "表示範囲に応じて段階描画"}
                   </p>
-                  {isPinRendering && (
+                  {isPinRendering && !isLoadingTiles && (
                     <p className="mt-1 hidden items-center gap-1 text-[10px] text-blue-700 sm:flex">
                       <Loader2 className="h-3 w-3 animate-spin" />
                       ピンを追加中
@@ -1229,12 +1158,18 @@ export default function Home() {
                 <p className="pt-1 text-xs text-gray-500">
                   地図を動かした後は「この範囲の店舗を表示」を押して一覧を更新できます。
                 </p>
-                {filteredStores.length > coordinateStores.length && (
+                {summary &&
+                  filteredStores.length === 0 &&
+                  !loading &&
+                  !isLoadingTiles && (
+                    <p className="text-xs text-gray-500 pt-1">
+                      地図を拡大するか「この範囲の店舗を表示」を押すと、店舗を読み込みます。
+                    </p>
+                  )}
+                {summary && summary.unmatchedStoreCount > 0 && (
                   <p className="text-xs text-gray-500 pt-1">
                     座標を確認できない
-                    {(
-                      filteredStores.length - coordinateStores.length
-                    ).toLocaleString()}
+                    {summary.unmatchedStoreCount.toLocaleString()}
                     件は地図外です。
                   </p>
                 )}

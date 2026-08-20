@@ -58,6 +58,10 @@ jspm_packages/
 # TypeScript cache
 *.tsbuildinfo
 
+# Python bytecode cache
+__pycache__/
+*.py[cod]
+
 # Optional npm cache directory
 .npm
 
@@ -108,3 +112,6 @@ temp/
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
 .project-config.json
+
+# Local-only fixture for validating static tile loading
+client/public/data/test-tiles/

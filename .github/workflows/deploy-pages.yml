@@ -98,16 +98,23 @@ jobs:
             --coordinates /tmp/store-coordinates.json \
             --source-snapshot "$snapshot"
           digest="$(sha256sum /tmp/stores.json | cut -c1-12)"
-          filename="coinplus-stores-${snapshot}_${digest}.json"
+          dataset_dir="coinplus-tiles-${snapshot}_${digest}"
           mkdir -p client/public/data
-          mv /tmp/stores.json "client/public/data/${filename}"
+          python3 scripts/build_tile_dataset.py \
+            --stores /tmp/stores.json \
+            --output-dir "client/public/data/${dataset_dir}" \
+            --source-snapshot "$snapshot" \
+            --version "${snapshot}-${digest}"
           cat > client/public/store-data-manifest.json <<EOF
           {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "version": "${snapshot}-${digest}",
             "updatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "datasetPath": "data/${filename}",
-            "sourceSnapshot": "${snapshot}"
+            "sourceSnapshot": "${snapshot}",
+            "tileDatasetPath": "data/${dataset_dir}",
+            "summaryPath": "data/${dataset_dir}/summary.json",
+            "tileIndexPath": "data/${dataset_dir}/tile-index.json",
+            "searchIndexPath": "data/${dataset_dir}/search-index.json"
           }
           EOF
 
