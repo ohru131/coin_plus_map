@@ -1,6 +1,6 @@
 # GitHub ActionsとGitHub Pagesの運用
 
-このリポジトリには、品質検査用の`CI`と、手動デプロイ用の`Deploy GitHub Pages`という2つのワークフローが含まれます。CIは`main`へのpushとpull requestで型検査・本番ビルドを実行します。Pagesデプロイは、公式店舗データの更新タイミングを利用者が管理できるよう手動実行に限定しています。
+このリポジトリには、品質検査用の`CI`と、公開用の`Deploy GitHub Pages`という2つのワークフローが含まれます。CIは`main`へのpushとpull requestで型検査・本番ビルドを実行します。Pagesデプロイは`main`へのpushで自動実行され、公開版を更新します。必要に応じてActions画面から手動実行することもできます。
 
 ## 初回設定
 
@@ -8,7 +8,11 @@ GitHub PagesはActionsワークフローで公開する方式を選択してく�
 
 このアプリの地図表示は**Leaflet + OpenStreetMap標準タイル**で構成しているため、Google Maps JavaScript APIキーおよび`VITE_GOOGLE_MAPS_API_KEY`のRepository secretは不要です。地図の帰属表示はLeafletコンポーネントに含めています。OpenStreetMapの利用時は、表示する地図上に著作権表示を残してください。[2]
 
-## デプロイ手順
+## 自動デプロイと手動デプロイ
+
+`main`ブランチへ変更をpushすると、`Deploy GitHub Pages`が自動的に起動します。push起動時には、公式COIN+データから対象4地域の店舗JSONを生成し、最新データを含む静的サイトを公開します。短時間に連続してpushされた場合は、古い実行を中止して最新の実行を優先します。
+
+手動デプロイは、即時の再公開や店舗データの再生成を明示的に制御したい場合に利用します。
 
 1. GitHubの**Actions**タブから**Deploy GitHub Pages**を選びます。
 2. **Run workflow**を選択します。通常は`refresh_store_data`を有効にして、公式COIN+データから対象4地域の店舗JSONを生成します。

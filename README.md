@@ -79,7 +79,7 @@ map_pin_verification_notes.md # 地図ピン機能の確認記録
 
 ## GitHub ActionsとGitHub Pages
 
-`main`へのpushとpull requestでは、GitHub Actionsが型検査と本番ビルドを実行します。GitHub Pagesへの公開は手動ワークフローとして用意しており、デプロイ時に公式データからPages用の店舗JSONを生成します。地図はLeafletとOpenStreetMapを利用するため、公開用のGoogle Maps APIキーは不要です。公開手順は[`docs/github-pages-deployment.md`](./docs/github-pages-deployment.md)を参照してください。
+`main`へのpushとpull requestでは、GitHub Actionsが型検査と本番ビルドを実行します。さらに、`main`へのpushではGitHub Pagesのデプロイワークフローが自動実行され、公式データからPages用の店舗JSONを生成して公開版を更新します。地図はLeafletとOpenStreetMapを利用するため、公開用のGoogle Maps APIキーは不要です。必要に応じて、Actions画面から手動デプロイを実行し、店舗データの更新有無を選択することもできます。公開手順は[`docs/github-pages-deployment.md`](./docs/github-pages-deployment.md)を参照してください。
 
 ## 留意事項
 

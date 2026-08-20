@@ -99,3 +99,10 @@
 - [ ] Google Maps認証・GitHub Pagesデプロイ設定をAPIキー不要の構成へ更新する。
 - [ ] 型検査・本番ビルド・主要な地図操作を確認する。
 - [ ] GitHubへ反映し、公開手順を更新する。
+
+## main push連動のGitHub Pages自動デプロイ
+
+- [x] 既存のPagesデプロイワークフローの起動条件とデータ更新処理を確認する。
+- [x] `main`へのpushで実行されるAPIキー不要のデプロイ設定へ更新する。
+- [ ] ワークフロー構文を検証し、GitHubへ同期する。
+- [ ] 自動実行されたActionsとGitHub Pagesの公開URLを確認する。
