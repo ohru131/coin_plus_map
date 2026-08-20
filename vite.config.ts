@@ -197,8 +197,13 @@ function vitePluginStorageProxy(): Plugin {
 }
 
 const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
+const configuredBasePath = process.env.VITE_BASE_PATH || "/";
+const deploymentBasePath = configuredBasePath === "/"
+  ? "/"
+  : `/${configuredBasePath.replace(/^\/+|\/+$/g, "")}/`;
 
 export default defineConfig({
+  base: deploymentBasePath,
   plugins,
   resolve: {
     alias: {

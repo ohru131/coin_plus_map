@@ -7,6 +7,7 @@ The target scope is Kyoto City, Osaka City, Ibaraki City, and Takatsuki City.
 
 import csv
 import json
+import argparse
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -46,14 +47,23 @@ def scope_label(prefecture: str, city: str) -> str | None:
     return None
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description='Build a COIN+ map dataset from the official CSV snapshot.')
+    parser.add_argument('--source', type=Path, default=SOURCE, help='Source CSV path.')
+    parser.add_argument('--output', type=Path, default=OUTPUT, help='Output JSON path.')
+    parser.add_argument('--source-snapshot', default=date.today().isoformat(), help='ISO date for the source snapshot.')
+    return parser.parse_args()
+
+
 def main() -> None:
-    if not SOURCE.exists():
-        raise FileNotFoundError(f'Missing source file: {SOURCE}')
+    args = parse_args()
+    if not args.source.exists():
+        raise FileNotFoundError(f'Missing source file: {args.source}')
 
     stores = []
     seen = set()
 
-    with SOURCE.open('r', encoding='utf-8-sig', newline='') as handle:
+    with args.source.open('r', encoding='utf-8-sig', newline='') as handle:
         reader = csv.DictReader(handle)
         for row in reader:
             name = (row.get('name') or '').strip()
@@ -84,12 +94,12 @@ def main() -> None:
             })
 
     stores.sort(key=lambda item: (item['area'], item['city'], item['name'], item['address']))
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
         json.dumps(
             {
                 'source': 'https://coinplus.jp/storesearch/all.html',
-                'sourceSnapshot': '2026-08-18',
+                'sourceSnapshot': args.source_snapshot,
                 'scope': ['京都市', '大阪市', '茨木市', '高槻市'],
                 'stores': stores,
             },

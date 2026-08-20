@@ -47,7 +47,7 @@ const AREA_CENTERS: Record<Exclude<Area, 'すべて'>, google.maps.LatLngLiteral
 };
 const DEFAULT_CENTER = { lat: 34.842, lng: 135.62 };
 const LIST_LIMIT = 100;
-const STORE_MANIFEST_PATH = '/store-data-manifest.json';
+const STORE_MANIFEST_PATH = `${import.meta.env.BASE_URL}store-data-manifest.json`;
 const STORE_CACHE_NAME = 'coinplus-store-dataset-v1';
 const LAST_MANIFEST_STORAGE_KEY = 'coinplus-store-last-manifest-v1';
 const GENRE_FILTERS: Array<{ id: GenreFilter; label: string; categories: string[] }> = [
