@@ -154,6 +154,26 @@
   font-weight: 700;
 }
 
+/* Mobile map surfaces reserve the viewport for pins; detail content moves to the app-level bottom sheet. */
+@media (max-width: 639px) {
+  .leaflet-popup-pane {
+    display: none;
+  }
+
+  .leaflet-control-zoom {
+    margin-top: 0.75rem;
+    margin-left: 0.75rem;
+  }
+
+  .leaflet-control-attribution {
+    max-width: 68vw;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 9px;
+  }
+}
+
 @layer components {
   /**
    * Custom container utility that centers content and adds responsive padding.

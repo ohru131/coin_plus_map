@@ -196,6 +196,20 @@ function isPositionInBounds(position: Coordinates, bounds: LatLngBounds) {
   return bounds.contains(position);
 }
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(query);
+    const updateMatches = () => setMatches(mediaQuery.matches);
+    updateMatches();
+    mediaQuery.addEventListener('change', updateMatches);
+    return () => mediaQuery.removeEventListener('change', updateMatches);
+  }, [query]);
+
+  return matches;
+}
+
 export default function Home() {
   const [stores, setStores] = useState<Store[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -210,7 +224,9 @@ export default function Home() {
   const [isLocating, setIsLocating] = useState(false);
   const [isPinning, setIsPinning] = useState(false);
   const [locationMessage, setLocationMessage] = useState('');
+  const [mobileLegendOpen, setMobileLegendOpen] = useState(false);
   const coordinateCacheRef = useRef<Map<string, Coordinates>>(new Map());
+  const isMobile = useMediaQuery('(max-width: 639px)');
 
   useEffect(() => {
     let isMounted = true;
@@ -342,6 +358,7 @@ export default function Home() {
 
   const showStoreOnMap = useCallback(async (store: Store) => {
     setSelectedStore(store);
+    setMobileLegendOpen(false);
     setLocationMessage('');
     if (!map) {
       setLocationMessage('地図を準備しています。少しお待ちください。');
@@ -383,19 +400,19 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex flex-col">
-      <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-2 mb-2"><MapPin className="w-6 h-6 text-blue-600 flex-shrink-0" /><h1 className="text-xl sm:text-2xl font-bold text-gray-900">COIN+ ストア マップ</h1></div>
-          <p className="text-xs sm:text-sm text-gray-600 ml-8">京都市・大阪市・茨木市・高槻市のCOIN+利用可能店舗を検索</p>
+      <header className="bg-white/95 shadow-sm border-b border-gray-100 sticky top-0 z-40 backdrop-blur">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex items-center gap-2 mb-1 sm:mb-2"><MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 flex-shrink-0" /><h1 className="text-lg sm:text-2xl font-bold text-gray-900">COIN+ ストア マップ</h1></div>
+          <p className="text-[11px] leading-4 sm:text-sm text-gray-600 ml-7 sm:ml-8">京都市・大阪市・茨木市・高槻市のCOIN+利用可能店舗を検索</p>
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 h-full">
-          <aside className="lg:col-span-1 space-y-4 flex flex-col min-h-[45vh] lg:min-h-0">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-[auto_1fr] gap-3 sm:gap-4 lg:gap-6">
+          <aside className="order-1 lg:col-start-1 lg:row-start-1">
             <Card className="shadow-md border-0">
-              <CardHeader className="pb-3"><CardTitle className="text-lg">店舗検索</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
+              <CardHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6 sm:pb-3"><CardTitle className="text-base sm:text-lg">店舗検索</CardTitle></CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3 sm:px-6 sm:pb-6">
                 <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" /><Input aria-label="店舗名・住所・ジャンルで検索" placeholder="店舗名・住所・ジャンルで検索" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="pl-9" /></div>
                 <label className="block text-xs font-medium text-gray-600" htmlFor="area-filter">対象エリア</label>
                 <select id="area-filter" aria-label="対象エリア" value={selectedArea} onChange={(event) => showArea(event.target.value as Area)} className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
@@ -412,16 +429,9 @@ export default function Home() {
                 {locationMessage && <p className="text-xs leading-5 text-blue-700 bg-blue-50 rounded-md px-3 py-2">{locationMessage}</p>}
               </CardContent>
             </Card>
-
-            <Card className="shadow-md border-0 flex-1 flex flex-col">
-              <CardHeader className="pb-3"><CardTitle className="text-lg">店舗一覧 <span className="text-sm font-normal text-gray-500">(地図範囲内 {visibleStores.length.toLocaleString()}件)</span></CardTitle>{filteredStores.length > LIST_LIMIT && <p className="text-xs text-gray-500 pt-1">検索結果の先頭{LIST_LIMIT}件を地図に表示しています。地図を動かすと一覧も更新されます。</p>}</CardHeader>
-              <CardContent className="flex-1 overflow-hidden flex flex-col"><div className="space-y-2 overflow-y-auto flex-1 pr-2 max-h-[52vh] lg:max-h-[calc(100vh-315px)]">
-                {loading ? <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div> : visibleStores.length === 0 ? <p className="text-sm text-gray-500 text-center py-8">該当する店舗がありません。</p> : visibleStores.map((store) => <button key={store.id} onClick={() => void showStoreOnMap(store)} className={`w-full text-left p-3 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${selectedStore?.id === store.id ? 'bg-blue-100 border-l-4 border-blue-600' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}><p className="font-semibold text-sm text-gray-900 truncate">{store.name}</p><p className="text-xs text-gray-600 truncate">{store.address}</p><p className="text-xs text-blue-600 font-medium mt-1">{store.genre}・{store.city}</p></button>)}
-              </div></CardContent>
-            </Card>
           </aside>
 
-          <section className="lg:col-span-2 min-h-[52vh] lg:min-h-0" aria-label="店舗マップ">
+          <section className="order-2 h-[52svh] min-h-[350px] max-h-[520px] lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-[calc(100vh-9.5rem)] lg:min-h-[560px] lg:max-h-none" aria-label="店舗マップ">
             <Card className="shadow-md border-0 h-full overflow-hidden"><CardContent className="p-0 h-full relative">
               <MapView className="w-full h-full rounded-lg" initialZoom={10} initialCenter={DEFAULT_CENTER} onMapReady={setMap} onBoundsChange={setMapBounds}>
                 <MarkerClusterGroup chunkedLoading>
@@ -429,19 +439,31 @@ export default function Home() {
                     const position = coordinates.get(store.id);
                     if (!position) return null;
                     const genre = getGenreFilterForStore(store);
-                    return <Marker key={store.id} position={position} icon={createGenrePinIcon(GENRE_PIN_COLORS[genre])} zIndexOffset={selectedStore?.id === store.id ? 1000 : 0}><Popup maxWidth={280}><div className="space-y-2 p-0.5"><p className="font-bold text-slate-900">{store.name}</p><p className="inline-block rounded-full px-2 py-0.5 text-xs font-bold" style={{ backgroundColor: `${GENRE_PIN_COLORS[genre]}18`, color: GENRE_PIN_COLORS[genre] }}>{genre} · COIN+利用可能</p><p className="text-xs leading-5 text-slate-600">{store.address}</p><p className="text-[11px] font-semibold text-slate-500">{store.area} · {store.city}</p><div className="flex flex-wrap gap-2 pt-1"><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${store.name} ${store.address}`)}`} target="_blank" rel="noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700">Google Mapsで開く</a><button type="button" onClick={() => setSelectedStore(store)} className="rounded-md bg-blue-600 px-2 py-1.5 text-xs font-bold text-white">詳細を表示</button></div></div></Popup></Marker>;
+                    return <Marker key={store.id} position={position} icon={createGenrePinIcon(GENRE_PIN_COLORS[genre])} zIndexOffset={selectedStore?.id === store.id ? 1000 : 0} eventHandlers={{ click: () => { if (isMobile) { setMobileLegendOpen(false); setSelectedStore(store); } } }}>
+                      {!isMobile && <Popup maxWidth={280}><div className="space-y-2 p-0.5"><p className="font-bold text-slate-900">{store.name}</p><p className="inline-block rounded-full px-2 py-0.5 text-xs font-bold" style={{ backgroundColor: `${GENRE_PIN_COLORS[genre]}18`, color: GENRE_PIN_COLORS[genre] }}>{genre} · COIN+利用可能</p><p className="text-xs leading-5 text-slate-600">{store.address}</p><p className="text-[11px] font-semibold text-slate-500">{store.area} · {store.city}</p><div className="flex flex-wrap gap-2 pt-1"><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${store.name} ${store.address}`)}`} target="_blank" rel="noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700">Google Mapsで開く</a><button type="button" onClick={() => setSelectedStore(store)} className="rounded-md bg-blue-600 px-2 py-1.5 text-xs font-bold text-white">詳細を表示</button></div></div></Popup>}
+                    </Marker>;
                   })}
                 </MarkerClusterGroup>
-                {userPosition && <CircleMarker center={userPosition} radius={9} pathOptions={{ color: '#ffffff', fillColor: '#2563eb', fillOpacity: 1, weight: 3 }}><Popup>現在地</Popup></CircleMarker>}
+                {userPosition && <CircleMarker center={userPosition} radius={9} pathOptions={{ color: '#ffffff', fillColor: '#2563eb', fillOpacity: 1, weight: 3 }}>{!isMobile && <Popup>現在地</Popup>}</CircleMarker>}
               </MapView>
-              <div className="absolute top-3 right-3 z-[500] max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm"><p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800"><MapPin className="w-3.5 h-3.5 text-blue-600" />検索結果の{mapPinStores.length}件をピン表示</p><p className="mt-1 text-[11px] text-slate-600">地図範囲内: {visibleStores.length}件</p>{isPinning && <p className="mt-1 flex items-center gap-1 text-[11px] text-blue-700"><Loader2 className="w-3 h-3 animate-spin" />住所からピンを準備中</p>}</div>
-              <div className="absolute bottom-3 left-3 z-[500] max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm" aria-label="ピンのジャンル別凡例"><p className="mb-1 text-[10px] font-semibold tracking-wide text-slate-500">ジャンル別ピン</p><div className="flex max-w-[310px] flex-wrap gap-x-2.5 gap-y-1">{GENRE_FILTERS.map((genreFilter) => <span key={genreFilter.id} className="flex items-center gap-1 text-[10px] text-slate-700"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: GENRE_PIN_COLORS[genreFilter.id] }} />{genreFilter.label}</span>)}</div></div>
+              <div className="absolute top-3 right-3 z-[500] rounded-lg border border-white/80 bg-white/95 px-2.5 py-1.5 shadow-sm backdrop-blur-sm"><p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800"><MapPin className="w-3.5 h-3.5 text-blue-600" /><span className="sm:hidden">{mapPinStores.length}件</span><span className="hidden sm:inline">検索結果の{mapPinStores.length}件をピン表示</span></p><p className="mt-1 hidden text-[11px] text-slate-600 sm:block">地図範囲内: {visibleStores.length}件</p>{isPinning && <p className="mt-1 flex items-center gap-1 text-[11px] text-blue-700"><Loader2 className="w-3 h-3 animate-spin" /><span className="hidden sm:inline">住所からピンを準備中</span></p>}</div>
+              <button type="button" onClick={() => setMobileLegendOpen((open) => !open)} aria-expanded={mobileLegendOpen} className="absolute bottom-3 left-3 z-[500] flex items-center gap-1.5 rounded-full border border-white/80 bg-white/95 px-3 py-2 text-[11px] font-bold text-slate-700 shadow-sm backdrop-blur-sm sm:hidden"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" />ピンの色</button>
+              {mobileLegendOpen && <div className="absolute bottom-14 left-3 z-[500] max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm sm:hidden" aria-label="ピンのジャンル別凡例"><div className="flex max-w-[260px] flex-wrap gap-x-2.5 gap-y-1">{GENRE_FILTERS.map((genreFilter) => <span key={genreFilter.id} className="flex items-center gap-1 text-[10px] text-slate-700"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: GENRE_PIN_COLORS[genreFilter.id] }} />{genreFilter.label}</span>)}</div></div>}
+              <div className="absolute bottom-3 left-3 z-[500] hidden max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm sm:block" aria-label="ピンのジャンル別凡例"><p className="mb-1 text-[10px] font-semibold tracking-wide text-slate-500">ジャンル別ピン</p><div className="flex max-w-[310px] flex-wrap gap-x-2.5 gap-y-1">{GENRE_FILTERS.map((genreFilter) => <span key={genreFilter.id} className="flex items-center gap-1 text-[10px] text-slate-700"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: GENRE_PIN_COLORS[genreFilter.id] }} />{genreFilter.label}</span>)}</div></div>
             </CardContent></Card>
           </section>
+          <aside className="order-3 lg:col-start-1 lg:row-start-2 lg:min-h-0">
+            <Card className="shadow-md border-0 flex flex-col">
+              <CardHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6 sm:pb-3"><CardTitle className="text-base sm:text-lg">店舗一覧 <span className="text-xs sm:text-sm font-normal text-gray-500">(地図範囲内 {visibleStores.length.toLocaleString()}件)</span></CardTitle>{filteredStores.length > LIST_LIMIT && <p className="text-xs text-gray-500 pt-1">検索結果の先頭{LIST_LIMIT}件を地図に表示しています。</p>}</CardHeader>
+              <CardContent className="px-3 pb-3 sm:px-6 sm:pb-6"><div className="space-y-1 overflow-y-auto pr-1 max-h-[42svh] lg:max-h-[calc(100vh-23rem)]">
+                {loading ? <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div> : visibleStores.length === 0 ? <p className="text-sm text-gray-500 text-center py-8">該当する店舗がありません。</p> : visibleStores.map((store) => <button key={store.id} onClick={() => void showStoreOnMap(store)} className={`w-full text-left p-3 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${selectedStore?.id === store.id ? 'bg-blue-100 border-l-4 border-blue-600' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}><p className="font-semibold text-sm text-gray-900 truncate">{store.name}</p><p className="text-xs text-gray-600 truncate">{store.address}</p><p className="text-xs text-blue-600 font-medium mt-1">{store.genre}・{store.city}</p></button>)}
+              </div></CardContent>
+            </Card>
+          </aside>
         </div>
       </main>
 
-      {selectedStore && <div className="fixed inset-0 bg-black/50 flex items-end z-[1000] sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-label="店舗詳細"><div className="bg-white w-full sm:max-w-md rounded-t-lg sm:rounded-lg shadow-lg animate-in slide-in-from-bottom sm:slide-in-from-center"><div className="p-6 space-y-4"><div className="flex justify-between items-start gap-4"><div><h2 className="text-xl font-bold text-gray-900">{selectedStore.name}</h2><p className="text-sm text-blue-600 font-medium mt-1">{selectedStore.genre}</p></div><button onClick={() => setSelectedStore(null)} className="text-gray-400 hover:text-gray-600" aria-label="閉じる"><X className="w-5 h-5" /></button></div><div className="space-y-2 border-t border-gray-200 pt-4"><p className="text-sm text-gray-600"><span className="font-semibold">住所:</span> {selectedStore.address}</p><p className="text-sm text-gray-600"><span className="font-semibold">市区町村:</span> {selectedStore.city}</p></div><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${selectedStore.name} ${selectedStore.address}`)}`} target="_blank" rel="noreferrer" className="flex h-10 w-full items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-medium text-blue-700 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><ExternalLink className="w-4 h-4 mr-2" />Google Mapsで開く</a><a href={`https://www.google.com/maps/dir/?api=1&origin=My+Location&destination=${encodeURIComponent(`${selectedStore.name} ${selectedStore.address}`)}&travelmode=walking`} target="_blank" rel="noreferrer" className="flex h-10 w-full items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Navigation className="w-4 h-4 mr-2" />現在地から徒歩で経路を開く</a><Button onClick={() => setSelectedStore(null)} className="w-full bg-slate-700 hover:bg-slate-800 text-white">閉じる</Button></div></div></div>}
+      {selectedStore && <div className="fixed inset-0 z-[1000] flex items-end bg-slate-950/25 sm:items-center sm:justify-center sm:bg-black/50" role="dialog" aria-modal="true" aria-label="店舗詳細"><button type="button" onClick={() => setSelectedStore(null)} className="absolute inset-0 cursor-default" aria-label="店舗詳細を閉じる" /><div className="relative max-h-[58svh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl animate-in slide-in-from-bottom sm:max-w-md sm:rounded-lg sm:slide-in-from-center"><div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-200 sm:hidden" /><div className="p-4 sm:p-6 space-y-3 sm:space-y-4"><div className="flex justify-between items-start gap-4"><div className="min-w-0"><h2 className="text-lg sm:text-xl font-bold text-gray-900 break-words">{selectedStore.name}</h2><p className="text-sm text-blue-600 font-medium mt-1">{selectedStore.genre}</p></div><button onClick={() => setSelectedStore(null)} className="shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="閉じる"><X className="w-5 h-5" /></button></div><div className="space-y-2 border-t border-gray-200 pt-3"><p className="text-sm leading-5 text-gray-600 break-words"><span className="font-semibold">住所:</span> {selectedStore.address}</p><p className="text-sm text-gray-600"><span className="font-semibold">市区町村:</span> {selectedStore.city}</p></div><div className="grid gap-2 sm:block sm:space-y-2"><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${selectedStore.name} ${selectedStore.address}`)}`} target="_blank" rel="noreferrer" className="flex h-10 w-full items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-medium text-blue-700 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><ExternalLink className="w-4 h-4 mr-2" />Google Mapsで開く</a><a href={`https://www.google.com/maps/dir/?api=1&origin=My+Location&destination=${encodeURIComponent(`${selectedStore.name} ${selectedStore.address}`)}&travelmode=walking`} target="_blank" rel="noreferrer" className="flex h-10 w-full items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Navigation className="w-4 h-4 mr-2" />現在地から徒歩で経路を開く</a></div></div></div></div>}
     </div>
   );
 }
