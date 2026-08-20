@@ -41,15 +41,6 @@ jobs:
         id: pages
         uses: actions/configure-pages@v5
 
-      - name: Verify Google Maps key
-        env:
-          GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-        run: |
-          test -n "$GOOGLE_MAPS_API_KEY" || {
-            echo "Repository secret VITE_GOOGLE_MAPS_API_KEY is required for GitHub Pages deployment." >&2
-            exit 1
-          }
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -83,7 +74,6 @@ jobs:
         env:
           VITE_DEPLOY_TARGET: github-pages
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}
-          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
         run: pnpm build
 
       - name: Upload GitHub Pages artifact

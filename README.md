@@ -21,24 +21,26 @@
 
 店舗データ本体は、バージョン付きJSONとして外部静的ストレージから配信します。アプリ起動時には小さな更新マニフェストだけを確認し、同一バージョンではブラウザの**Cache Storage**に保存済みの店舗JSONを再利用します。そのため、通常の再訪時に全店舗JSONを再取得しません。
 
-| 項目           | 現在の構成                                          |
-| -------------- | --------------------------------------------------- |
-| 更新情報       | `client/public/store-data-manifest.json`            |
-| 店舗データ     | マニフェストの`datasetPath`が指すバージョン付きJSON |
-| 端末キャッシュ | `coinplus-store-dataset-v1`（Cache Storage）        |
-| localStorage   | 小さな更新マニフェストのみを保存                    |
-| 詳細な更新手順 | [`data_update_guide.md`](./data_update_guide.md)    |
+| 項目           | 現在の構成                                                                  |
+| -------------- | --------------------------------------------------------------------------- |
+| 更新情報       | `client/public/store-data-manifest.json`                                    |
+| 店舗データ     | マニフェストの`datasetPath`が指すバージョン付きJSON                         |
+| 端末キャッシュ | `coinplus-store-dataset-v1`（Cache Storage）                                |
+| localStorage   | 小さな更新マニフェストと、住所座標の再利用用キャッシュを保存                |
+| 住所座標       | 国土地理院の住所検索サービスから取得し、初回後は端末のキャッシュを再利用    |
+| 詳細な更新手順 | [`data_update_guide.md`](./data_update_guide.md)                            |
 
 ## 技術構成
 
-| 分類               | 使用技術                             |
-| ------------------ | ------------------------------------ |
-| UI                 | React 19、TypeScript、Tailwind CSS 4 |
-| ビルド             | Vite 7                               |
-| 地図               | Google Maps JavaScript API           |
-| 地図クラスタリング | `@googlemaps/markerclusterer`        |
-| アイコン           | Lucide React                         |
-| パッケージ管理     | pnpm                                 |
+| 分類               | 使用技術                                      |
+| ------------------ | --------------------------------------------- |
+| UI                 | React 19、TypeScript、Tailwind CSS 4          |
+| ビルド             | Vite 7                                        |
+| 地図               | Leaflet、OpenStreetMap標準タイル              |
+| 地図クラスタリング | `react-leaflet-cluster`                       |
+| 住所検索           | 国土地理院住所検索サービス                    |
+| アイコン           | Lucide React                                  |
+| パッケージ管理     | pnpm                                          |
 
 ## ローカル起動
 
@@ -66,7 +68,7 @@ client/
     store-data-manifest.json  # 店舗JSONのバージョン情報
   src/
     pages/Home.tsx            # 検索、店舗一覧、地図、ピンの主な実装
-    components/Map.tsx        # Google Mapsの初期化
+    components/Map.tsx        # LeafletとOpenStreetMapの地図基盤
 data_update_guide.md          # 店舗JSONの更新・キャッシュ運用手順
 map_pin_verification_notes.md # 地図ピン機能の確認記録
 ```
@@ -77,11 +79,11 @@ map_pin_verification_notes.md # 地図ピン機能の確認記録
 
 ## GitHub ActionsとGitHub Pages
 
-`main`へのpushとpull requestでは、GitHub Actionsが型検査と本番ビルドを実行します。GitHub Pagesへの公開は手動ワークフローとして用意しており、デプロイ時に公式データからPages用の店舗JSONを生成します。初回設定、Google Mapsキーの制限、公開手順は[`docs/github-pages-deployment.md`](./docs/github-pages-deployment.md)を参照してください。
+`main`へのpushとpull requestでは、GitHub Actionsが型検査と本番ビルドを実行します。GitHub Pagesへの公開は手動ワークフローとして用意しており、デプロイ時に公式データからPages用の店舗JSONを生成します。地図はLeafletとOpenStreetMapを利用するため、公開用のGoogle Maps APIキーは不要です。公開手順は[`docs/github-pages-deployment.md`](./docs/github-pages-deployment.md)を参照してください。
 
 ## 留意事項
 
-本アプリはCOIN+の公式アプリではありません。店舗情報の正確性・最新性は、必ず[公式のCOIN+店舗検索ページ][1]で確認してください。Google Mapsを本プロジェクトの実行環境以外で利用する場合は、別途Google Maps JavaScript APIの認証設定が必要になることがあります。[2]
+本アプリはCOIN+の公式アプリではありません。店舗情報の正確性・最新性は、必ず[公式のCOIN+店舗検索ページ][1]で確認してください。地図タイルはOpenStreetMapの標準タイルを利用しており、アプリ内の帰属表示を維持してください。[2] 住所検索には国土地理院の公開サービスを利用します。[3]
 
 ## License
 
@@ -90,4 +92,5 @@ MIT
 ## References
 
 [1]: https://coinplus.jp/storesearch/all.html?region=%E9%96%A2%E8%A5%BF "COIN+ 店舗検索（関西）"
-[2]: https://developers.google.com/maps/documentation/javascript "Google Maps JavaScript API documentation"
+[2]: https://www.openstreetmap.org/copyright "OpenStreetMap Copyright and License"
+[3]: https://maps.gsi.go.jp/help/termsofuse.html "地理院地図｜利用規約"

@@ -133,6 +133,27 @@
   }
 }
 
+/* Leaflet controls, popups, and marker clusters keep the blue-forward map language consistent. */
+.leaflet-container {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #e8eff5;
+}
+
+.coinplus-genre-pin {
+  background: transparent;
+  border: 0;
+}
+
+.marker-cluster {
+  background-color: rgb(37 99 235 / 18%);
+}
+
+.marker-cluster div {
+  background-color: #2563eb;
+  color: white;
+  font-weight: 700;
+}
+
 @layer components {
   /**
    * Custom container utility that centers content and adds responsive padding.
