@@ -92,27 +92,42 @@ function isPositionInBounds(position: google.maps.LatLngLiteral, bounds: google.
 
 function createStoreInfoContent(store: Store, genre: GenreFilter, onShowDetails: () => void) {
   const container = document.createElement('div');
-  container.style.cssText = 'min-width:190px;max-width:240px;padding:2px 1px;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+  container.style.cssText = 'min-width:220px;max-width:270px;padding:3px 2px;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
 
   const title = document.createElement('p');
   title.textContent = store.name;
-  title.style.cssText = 'margin:0 0 5px;color:#172033;font-size:14px;font-weight:700;line-height:1.35;';
+  title.style.cssText = 'margin:0 0 6px;color:#172033;font-size:15px;font-weight:700;line-height:1.35;';
 
   const category = document.createElement('p');
-  category.textContent = genre;
-  category.style.cssText = `margin:0 0 6px;color:${GENRE_PIN_COLORS[genre]};font-size:12px;font-weight:700;`;
+  category.textContent = `${genre} · COIN+利用可能`;
+  category.style.cssText = `display:inline-block;margin:0 0 8px;border-radius:999px;background:${GENRE_PIN_COLORS[genre]}18;color:${GENRE_PIN_COLORS[genre]};padding:3px 7px;font-size:11px;font-weight:700;`;
 
   const address = document.createElement('p');
   address.textContent = store.address;
-  address.style.cssText = 'margin:0 0 9px;color:#4a5568;font-size:11px;line-height:1.45;';
+  address.style.cssText = 'margin:0 0 4px;color:#4a5568;font-size:12px;line-height:1.45;';
+
+  const area = document.createElement('p');
+  area.textContent = `${store.area} · ${store.city}`;
+  area.style.cssText = 'margin:0 0 10px;color:#64748b;font-size:11px;font-weight:600;line-height:1.35;';
+
+  const actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+
+  const mapsLink = document.createElement('a');
+  mapsLink.textContent = 'Google Mapsで開く';
+  mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${store.name} ${store.address}`)}`;
+  mapsLink.target = '_blank';
+  mapsLink.rel = 'noreferrer';
+  mapsLink.style.cssText = 'display:inline-flex;align-items:center;border:1px solid #bfdbfe;border-radius:5px;background:#eff6ff;color:#1d4ed8;padding:6px 8px;font-size:11px;font-weight:700;text-decoration:none;';
 
   const detailButton = document.createElement('button');
   detailButton.type = 'button';
-  detailButton.textContent = '店舗詳細を見る';
-  detailButton.style.cssText = 'border:0;border-radius:5px;background:#2563eb;color:#fff;padding:6px 9px;font-size:12px;font-weight:700;cursor:pointer;';
+  detailButton.textContent = '詳細を表示';
+  detailButton.style.cssText = 'border:0;border-radius:5px;background:#2563eb;color:#fff;padding:6px 9px;font-size:11px;font-weight:700;cursor:pointer;';
   detailButton.addEventListener('click', onShowDetails);
 
-  container.append(title, category, address, detailButton);
+  actions.append(mapsLink, detailButton);
+  container.append(title, category, address, area, actions);
   return container;
 }
 
@@ -475,7 +490,10 @@ export default function Home() {
               icon: createGenrePinIcon(GENRE_PIN_COLORS[genre]),
             });
             marker.addListener('click', () => {
-              infoWindowRef.current?.setContent(createStoreInfoContent(store, genre, () => setSelectedStore(store)));
+              infoWindowRef.current?.setContent(createStoreInfoContent(store, genre, () => {
+                infoWindowRef.current?.close();
+                setSelectedStore(store);
+              }));
               infoWindowRef.current?.open({ map, anchor: marker, shouldFocus: false });
             });
             resultMarkersRef.current.set(store.id, marker);
