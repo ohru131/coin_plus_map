@@ -1,6 +1,12 @@
 name: Deploy GitHub Pages
 
 on:
+  push:
+    branches:
+      - main
+  schedule:
+    # GitHub ActionsのcronはUTC。毎月1日 00:15 UTC = 09:15 JST。
+    - cron: "15 0 1 * *"
   workflow_dispatch:
     inputs:
       refresh_store_data:
@@ -16,7 +22,7 @@ permissions:
 
 concurrency:
   group: github-pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -45,7 +51,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prepare versioned store dataset
-        if: inputs.refresh_store_data
+        if: github.event_name != 'workflow_dispatch' || inputs.refresh_store_data
         run: |
           set -euo pipefail
           snapshot="$(date -u +%F)"
