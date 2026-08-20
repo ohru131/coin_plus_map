@@ -2,45 +2,48 @@
 
 京都市・大阪市・茨木市・高槻市にある**COIN+利用可能店舗**を、検索・ジャンル・地図から探せるスマートフォン対応Webアプリです。店舗データは公式のCOIN+店舗検索を基にしたスナップショットを利用し、地図表示、現在地のエリア判定、Google Mapsへの遷移を提供します。[1]
 
+> **公開アプリ:** [COIN+ ストアマップを開く](https://ohru131.github.io/coin_plus_map/)
+
 > **対象データの基準日：2026-08-18**。掲載内容は更新タイミングにより公式情報と差異が生じる可能性があるため、利用前に公式ページでもご確認ください。
 
 ## 主な機能
 
-| 機能                     | 内容                                                                                    |
-| ------------------------ | --------------------------------------------------------------------------------------- |
-| キーワード検索           | 店舗名・住所・ジャンルでリアルタイムに検索します。                                      |
-| エリア・ジャンル絞り込み | 京都市・大阪市・茨木市・高槻市を選択でき、7つのジャンルを複数選択できます。             |
-| ジャンル別件数           | 現在のエリア・キーワード条件に合う店舗数をジャンルボタンに表示します。                  |
-| 現在地連動               | 現在地を地図に表示し、対象地域内では市区の絞り込みを自動選択します。                    |
-| 地図ピン                 | 検索結果の先頭100件をジャンル別の色で表示します。近接するピンはクラスタに集約されます。 |
-| 地図範囲連動             | 地図を動かすと、表示範囲内の店舗だけが一覧に表示されます。                              |
-| 店舗詳細                 | ピンの吹き出しと詳細モーダルから、住所・ジャンルを確認できます。                        |
-| Google Maps連携          | 店舗の地図検索、または現在地からの徒歩経路をGoogle Mapsで開けます。                     |
+| 機能                     | 内容                                                                                     |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| キーワード検索           | 店舗名・住所・ジャンルでリアルタイムに検索します。                                       |
+| エリア・ジャンル絞り込み | 京都市・大阪市・茨木市・高槻市を選択でき、7つのジャンルを複数選択できます。              |
+| ジャンル別件数           | 現在のエリア・キーワード条件に合う店舗数をジャンルボタンに表示します。                   |
+| 現在地連動               | 現在地を地図に表示し、対象地域内では市区の絞り込みを自動選択します。                     |
+| 地図ピン                 | 低ズームでは地域集約を表示し、拡大後は表示範囲に必要な店舗タイルだけを段階描画します。 |
+| 地図範囲連動             | 地図を動かした後に明示操作すると、必要なタイルを追加取得して表示範囲内の全該当店舗を一覧に反映します。 |
+| 店舗詳細                 | ピンの吹き出しと詳細モーダルから、住所・ジャンルを確認できます。                         |
+| Google Maps連携          | 店舗の地図検索、または現在地からの徒歩経路をGoogle Mapsで開けます。                      |
 
 ## データとキャッシュ
 
-店舗データ本体は、バージョン付きJSONとして外部静的ストレージから配信します。アプリ起動時には小さな更新マニフェストだけを確認し、同一バージョンではブラウザの**Cache Storage**に保存済みの店舗JSONを再利用します。そのため、通常の再訪時に全店舗JSONを再取得しません。
+店舗データは、バージョン付きの静的タイルとしてGitHub Pagesから配信します。アプリ起動時には小さなマニフェスト、サマリー、タイル索引だけを取得し、地図の表示範囲に必要な店舗タイルを追加取得します。同一バージョンのタイルはブラウザの**Cache Storage**から再利用するため、通常の再訪や地図の往復で同じタイルを再取得しません。
 
-| 項目           | 現在の構成                                                                  |
-| -------------- | --------------------------------------------------------------------------- |
-| 更新情報       | `client/public/store-data-manifest.json`                                    |
-| 店舗データ     | マニフェストの`datasetPath`が指すバージョン付きJSON                         |
-| 端末キャッシュ | `coinplus-store-dataset-v1`（Cache Storage）                                |
-| localStorage   | 小さな更新マニフェストと、住所座標の再利用用キャッシュを保存                |
-| 住所座標       | 国土地理院の住所検索サービスから取得し、初回後は端末のキャッシュを再利用    |
-| 詳細な更新手順 | [`data_update_guide.md`](./data_update_guide.md)                            |
+| 項目           | 現在の構成                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| 更新情報       | `client/public/store-data-manifest.json` |
+| 店舗データ     | `summary.json`、低ズーム集約タイル、z14/z15の詳細店舗タイル、検索索引 |
+| 端末キャッシュ | `coinplus-store-tiles-{version}`（Cache Storage） |
+| 読込制御       | 表示範囲の先読み、最大4並列、移動後の読込中止、メモリ上のLRU退避 |
+| 検索           | キーワード入力時に検索索引を遅延取得し、該当タイルだけを追加取得 |
+| 住所座標       | GitHub Actionsでjageocoderの街区レベル住所辞書から事前生成 |
+| 詳細設計       | [`docs/tile-data-loading-design.md`](./docs/tile-data-loading-design.md) |
 
 ## 技術構成
 
-| 分類               | 使用技術                                      |
-| ------------------ | --------------------------------------------- |
-| UI                 | React 19、TypeScript、Tailwind CSS 4          |
-| ビルド             | Vite 7                                        |
-| 地図               | Leaflet、OpenStreetMap標準タイル              |
-| 地図クラスタリング | `react-leaflet-cluster`                       |
-| 住所検索           | 国土地理院住所検索サービス                    |
-| アイコン           | Lucide React                                  |
-| パッケージ管理     | pnpm                                          |
+| 分類               | 使用技術                                                 |
+| ------------------ | -------------------------------------------------------- |
+| UI                 | React 19、TypeScript、Tailwind CSS 4                     |
+| ビルド             | Vite 7                                                   |
+| 地図               | Leaflet、OpenStreetMap標準タイル                         |
+| 地図クラスタリング | `react-leaflet-cluster`                                  |
+| 住所座標化         | jageocoder街区レベル住所辞書（GitHub Actionsで事前生成） |
+| アイコン           | Lucide React                                             |
+| パッケージ管理     | pnpm                                                     |
 
 ## ローカル起動
 
@@ -65,25 +68,29 @@ pnpm dev
 ```text
 client/
   public/
-    store-data-manifest.json  # 店舗JSONのバージョン情報
+    store-data-manifest.json  # タイルデータセットのバージョン情報
   src/
     pages/Home.tsx            # 検索、店舗一覧、地図、ピンの主な実装
     components/Map.tsx        # LeafletとOpenStreetMapの地図基盤
-data_update_guide.md          # 店舗JSONの更新・キャッシュ運用手順
-map_pin_verification_notes.md # 地図ピン機能の確認記録
+    hooks/useStoreTiles.ts    # タイルの遅延読込・キャッシュ・中止制御
+    lib/storeTiles.ts         # タイル座標・索引・データ形式
+scripts/
+  build_tile_dataset.py       # 詳細タイル・集約・検索索引の生成
+docs/
+  tile-data-loading-design.md # タイル読込の詳細設計
 ```
 
 ## 店舗データの更新
 
-新しい店舗データを反映する際は、新しいファイル名のJSONを外部静的ストレージへ登録し、`store-data-manifest.json`の`version`、`updatedAt`、`datasetPath`、`sourceSnapshot`を更新します。アプリは変更された`datasetPath`を検出すると新JSONを一度だけ取得し、古い店舗データのキャッシュを削除します。詳細は[`data_update_guide.md`](./data_update_guide.md)を参照してください。
+月次実行または店舗データ更新を有効にした手動デプロイでは、公式CSVから座標付き店舗データを生成し、z14/z15詳細タイル、z10集約タイル、検索索引、サマリー、バージョン付きマニフェストを作成します。アプリは新バージョンを検出すると、新しいタイルキャッシュへ切り替え、旧バージョンのタイルキャッシュを削除します。
 
 ## GitHub ActionsとGitHub Pages
 
-`main`へのpushとpull requestでは、GitHub Actionsが型検査と本番ビルドを実行します。GitHub Pagesへの公開は手動ワークフローとして用意しており、デプロイ時に公式データからPages用の店舗JSONを生成します。地図はLeafletとOpenStreetMapを利用するため、公開用のGoogle Maps APIキーは不要です。公開手順は[`docs/github-pages-deployment.md`](./docs/github-pages-deployment.md)を参照してください。
+`main`へのpushとpull requestでは、GitHub Actionsが型検査と本番ビルドを実行します。さらに、`main`へのpushおよび毎月1日09:15（日本時間）には、公式データから座標付き店舗、詳細タイル、低ズーム集約、検索索引を生成してGitHub Pagesを更新します。住所辞書はGitHub Actionsのキャッシュに保持するため、初回以降の更新では再利用されます。地図はLeafletとOpenStreetMapを利用するため、公開用のGoogle Maps APIキーは不要です。必要に応じて、Actions画面から手動デプロイを実行し、店舗データの更新有無を選択することもできます。公開手順は[`docs/github-pages-deployment.md`](./docs/github-pages-deployment.md)を参照してください。
 
 ## 留意事項
 
-本アプリはCOIN+の公式アプリではありません。店舗情報の正確性・最新性は、必ず[公式のCOIN+店舗検索ページ][1]で確認してください。地図タイルはOpenStreetMapの標準タイルを利用しており、アプリ内の帰属表示を維持してください。[2] 住所検索には国土地理院の公開サービスを利用します。[3]
+本アプリはCOIN+の公式アプリではありません。店舗情報の正確性・最新性は、必ず[公式のCOIN+店舗検索ページ][1]で確認してください。地図タイルはOpenStreetMapの標準タイルを利用しており、アプリ内の帰属表示を維持してください。[2] 全店舗座標は、外部検索APIの一括呼出しを避け、街区レベルの住所辞書からビルド時に生成します。座標の出典と精度上の留意事項は[`docs/coordinate-generation.md`](./docs/coordinate-generation.md)に記録しています。[3] [4]
 
 ## License
 
@@ -94,3 +101,4 @@ MIT
 [1]: https://coinplus.jp/storesearch/all.html?region=%E9%96%A2%E8%A5%BF "COIN+ 店舗検索（関西）"
 [2]: https://www.openstreetmap.org/copyright "OpenStreetMap Copyright and License"
 [3]: https://maps.gsi.go.jp/help/termsofuse.html "地理院地図｜利用規約"
+[4]: https://t-sagara.github.io/jageocoder/ "Jageocoder"

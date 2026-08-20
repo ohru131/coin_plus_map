@@ -52,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--source', type=Path, default=SOURCE, help='Source CSV path.')
     parser.add_argument('--output', type=Path, default=OUTPUT, help='Output JSON path.')
     parser.add_argument('--source-snapshot', default=date.today().isoformat(), help='ISO date for the source snapshot.')
+    parser.add_argument('--coordinates', type=Path, help='Optional coordinate cache JSON created by geocode_store_dataset.py.')
     return parser.parse_args()
 
 
@@ -59,6 +60,13 @@ def main() -> None:
     args = parse_args()
     if not args.source.exists():
         raise FileNotFoundError(f'Missing source file: {args.source}')
+
+    coordinate_cache = {}
+    if args.coordinates:
+        if not args.coordinates.exists():
+            raise FileNotFoundError(f'Missing coordinate cache: {args.coordinates}')
+        coordinate_payload = json.loads(args.coordinates.read_text(encoding='utf-8'))
+        coordinate_cache = coordinate_payload.get('coordinates', {})
 
     stores = []
     seen = set()
@@ -82,7 +90,7 @@ def main() -> None:
                 continue
             seen.add(key)
 
-            stores.append({
+            store = {
                 'id': f'coinplus-{len(stores) + 1}',
                 'name': name,
                 'address': full_address,
@@ -91,7 +99,15 @@ def main() -> None:
                 'area': area,
                 'genre': CATEGORY_NAMES.get(category_id, 'その他'),
                 'categoryId': category_id,
-            })
+            }
+            coordinate = coordinate_cache.get(full_address)
+            if coordinate:
+                store.update({
+                    'latitude': coordinate['latitude'],
+                    'longitude': coordinate['longitude'],
+                    'geocodeLevel': coordinate.get('geocodeLevel'),
+                })
+            stores.append(store)
 
     stores.sort(key=lambda item: (item['area'], item['city'], item['name'], item['address']))
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -110,7 +126,9 @@ def main() -> None:
     )
 
     counts = Counter(item['area'] for item in stores)
+    coordinates_count = sum(1 for item in stores if 'latitude' in item and 'longitude' in item)
     print('Total stores:', len(stores))
+    print('Stores with coordinates:', coordinates_count)
     for area in ['京都市', '大阪市', '茨木市', '高槻市']:
         print(f'{area}: {counts[area]}')
 
