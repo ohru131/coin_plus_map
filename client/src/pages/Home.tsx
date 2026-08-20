@@ -1,7 +1,14 @@
 /**
  * Design: 明快な白地とCOIN+ブルーで、モバイルでも現在地・ジャンル・個別店舗を迷わず辿れるLeaflet地図画面。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { CircleMarker, Marker, Popup } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { divIcon, type LatLngBounds, type Map as LeafletMap } from "leaflet";
@@ -95,6 +102,9 @@ const AREA_CENTERS: Record<Exclude<Area, "すべて">, Coordinates> = {
 };
 const DEFAULT_CENTER: Coordinates = [34.842, 135.62];
 const LIST_PAGE_SIZE = 100;
+const PIN_INITIAL_BATCH_SIZE = 300;
+const PIN_BATCH_SIZE = 450;
+const PIN_BATCH_DELAY_MS = 45;
 const STORE_MANIFEST_PATH = `${import.meta.env.BASE_URL}store-data-manifest.json`;
 const STORE_CACHE_NAME = "coinplus-store-dataset-v1";
 const LAST_MANIFEST_STORAGE_KEY = "coinplus-store-last-manifest-v1";
@@ -339,6 +349,13 @@ function isPositionInBounds(position: Coordinates, bounds: LatLngBounds) {
   return bounds.contains(position);
 }
 
+function getPinRenderBudget(zoom: number) {
+  if (zoom < 10) return 1_800;
+  if (zoom < 12) return 3_600;
+  if (zoom < 14) return 6_000;
+  return 11_500;
+}
+
 function distanceInMeters(
   [fromLatitude, fromLongitude]: Coordinates,
   [toLatitude, toLongitude]: Coordinates
@@ -470,6 +487,7 @@ export default function Home() {
     Record<string, StoreExtraInfo>
   >({});
   const [listPageSize, setListPageSize] = useState(LIST_PAGE_SIZE);
+  const [renderedPinCount, setRenderedPinCount] = useState(0);
   const coordinateCacheRef = useRef<Map<string, Coordinates>>(new Map());
   const locationRequestedRef = useRef(false);
   const storeExtraInfoCacheRef = useRef<Map<string, StoreExtraInfo>>(new Map());
@@ -594,18 +612,38 @@ export default function Home() {
       return first.name.localeCompare(second.name, "ja-JP");
     });
   }, [coordinates, filteredStores, nearbyTown, userPosition]);
-  const mapPinStores = useMemo(
+  const coordinateStores = useMemo(
     () => prioritizedStores.filter(store => coordinates.has(store.id)),
     [coordinates, prioritizedStores]
   );
+  const deferredMapBounds = useDeferredValue(mapBounds);
+  const mapZoom = map?.getZoom() ?? 10;
+  const candidatePinStores = useMemo(() => {
+    if (!deferredMapBounds) return coordinateStores;
+    const bufferedBounds = deferredMapBounds.pad(0.25);
+    return coordinateStores.filter(store => {
+      const position = coordinates.get(store.id);
+      return position ? isPositionInBounds(position, bufferedBounds) : false;
+    });
+  }, [coordinateStores, coordinates, deferredMapBounds]);
+  const pinRenderTarget = Math.min(
+    candidatePinStores.length,
+    getPinRenderBudget(mapZoom)
+  );
+  const mapPinStores = useMemo(
+    () => candidatePinStores.slice(0, renderedPinCount),
+    [candidatePinStores, renderedPinCount]
+  );
+  const isPinRendering = renderedPinCount < pinRenderTarget;
+  const hasDeferredPins = candidatePinStores.length > pinRenderTarget;
   const visibleStores = useMemo(() => {
     const activeBounds = listedBounds ?? mapBounds;
-    if (!activeBounds) return mapPinStores;
-    return mapPinStores.filter(store => {
+    if (!activeBounds) return coordinateStores;
+    return coordinateStores.filter(store => {
       const position = coordinates.get(store.id);
       return position ? isPositionInBounds(position, activeBounds) : true;
     });
-  }, [coordinates, listedBounds, mapBounds, mapPinStores]);
+  }, [coordinateStores, coordinates, listedBounds, mapBounds]);
   const hasUnappliedMapBounds = Boolean(
     mapBounds && listedBounds && !mapBounds.equals(listedBounds)
   );
@@ -618,6 +656,30 @@ export default function Home() {
   useEffect(() => {
     setListPageSize(LIST_PAGE_SIZE);
   }, [listedBounds, searchQuery, selectedArea, selectedGenres]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    let timeoutId: number | undefined;
+    let nextCount = Math.min(PIN_INITIAL_BATCH_SIZE, pinRenderTarget);
+    setRenderedPinCount(nextCount);
+
+    const renderNextBatch = () => {
+      if (isCancelled || nextCount >= pinRenderTarget) return;
+      nextCount = Math.min(nextCount + PIN_BATCH_SIZE, pinRenderTarget);
+      setRenderedPinCount(nextCount);
+      if (nextCount < pinRenderTarget) {
+        timeoutId = window.setTimeout(renderNextBatch, PIN_BATCH_DELAY_MS);
+      }
+    };
+
+    if (nextCount < pinRenderTarget) {
+      timeoutId = window.setTimeout(renderNextBatch, PIN_BATCH_DELAY_MS);
+    }
+    return () => {
+      isCancelled = true;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [candidatePinStores, pinRenderTarget]);
 
   useEffect(() => {
     if (!listedBounds && mapBounds) setListedBounds(mapBounds);
@@ -1052,7 +1114,8 @@ export default function Home() {
                       {mapPinStores.length.toLocaleString()}件
                     </span>
                     <span className="hidden sm:inline">
-                      {mapPinStores.length.toLocaleString()}件をピン表示
+                      {mapPinStores.length.toLocaleString()} /{" "}
+                      {candidatePinStores.length.toLocaleString()}件を描画
                     </span>
                   </p>
                   <p className="mt-1 hidden text-[11px] text-slate-600 sm:block">
@@ -1064,8 +1127,19 @@ export default function Home() {
                     </p>
                   )}
                   <p className="mt-1 hidden text-[10px] text-slate-500 sm:block">
-                    座標のある全店舗を表示
+                    表示範囲に応じて段階描画
                   </p>
+                  {isPinRendering && (
+                    <p className="mt-1 hidden items-center gap-1 text-[10px] text-blue-700 sm:flex">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      ピンを追加中
+                    </p>
+                  )}
+                  {hasDeferredPins && !isPinRendering && (
+                    <p className="mt-1 hidden text-[10px] text-slate-500 sm:block">
+                      拡大すると追加表示
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
