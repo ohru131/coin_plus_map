@@ -1229,11 +1229,11 @@ export default function Home() {
                 <p className="pt-1 text-xs text-gray-500">
                   地図を動かした後は「この範囲の店舗を表示」を押して一覧を更新できます。
                 </p>
-                {filteredStores.length > mapPinStores.length && (
+                {filteredStores.length > coordinateStores.length && (
                   <p className="text-xs text-gray-500 pt-1">
                     座標を確認できない
                     {(
-                      filteredStores.length - mapPinStores.length
+                      filteredStores.length - coordinateStores.length
                     ).toLocaleString()}
                     件は地図外です。
                   </p>
