@@ -6,7 +6,7 @@ on:
       - main
   schedule:
     # GitHub ActionsのcronはUTC。毎月1日00:15 UTC = 09:15 JST。
-    - cron: '15 0 1 * *'
+    - cron: "15 0 1 * *"
   workflow_dispatch:
     inputs:
       refresh_store_data:
@@ -48,6 +48,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set up Python for offline geocoding
+        if: github.event_name != 'workflow_dispatch' || inputs.refresh_store_data
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install offline geocoder
+        if: github.event_name != 'workflow_dispatch' || inputs.refresh_store_data
+        run: python -m pip install --disable-pip-version-check 'jageocoder==2.2.1.1'
+
+      - name: Restore street-block address dictionary
+        id: jageocoder-dictionary
+        if: github.event_name != 'workflow_dispatch' || inputs.refresh_store_data
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/jageocoder/db2
+          key: jageocoder-gaiku-v22-20250423
+
+      - name: Install street-block address dictionary
+        if: (github.event_name != 'workflow_dispatch' || inputs.refresh_store_data) && steps.jageocoder-dictionary.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --location \
+            'https://www.info-proto.com/static/jageocoder/latest/v2/gaiku_all_20250423_v22.zip' \
+            --output "${RUNNER_TEMP}/gaiku_all_v22.zip"
+          JAGEOCODER_DB2_DIR="${RUNNER_TEMP}/jageocoder/db2" \
+            jageocoder install-dictionary "${RUNNER_TEMP}/gaiku_all_v22.zip"
+
       - name: Prepare versioned store dataset
         if: github.event_name != 'workflow_dispatch' || inputs.refresh_store_data
         run: |
@@ -58,7 +86,16 @@ jobs:
             --output /tmp/all_shop_list.csv
           python3 scripts/build_store_dataset.py \
             --source /tmp/all_shop_list.csv \
+            --output /tmp/stores-raw.json \
+            --source-snapshot "$snapshot"
+          python3 scripts/geocode_store_dataset.py \
+            --stores /tmp/stores-raw.json \
+            --output /tmp/store-coordinates.json \
+            --db-dir "${RUNNER_TEMP}/jageocoder/db2"
+          python3 scripts/build_store_dataset.py \
+            --source /tmp/all_shop_list.csv \
             --output /tmp/stores.json \
+            --coordinates /tmp/store-coordinates.json \
             --source-snapshot "$snapshot"
           digest="$(sha256sum /tmp/stores.json | cut -c1-12)"
           filename="coinplus-stores-${snapshot}_${digest}.json"
