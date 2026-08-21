@@ -904,16 +904,16 @@ export default function Home() {
       )}
 
       <main className="flex-1 w-full max-w-[1600px] mx-auto px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
-        <div className="grid grid-cols-1 gap-3 lg:h-[calc(100svh-8.5rem)] lg:min-h-[620px] lg:grid-cols-[minmax(350px,410px)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-5">
-          <aside className="order-1 lg:col-start-1 lg:row-start-1">
-            <Card className="overflow-visible rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
+        <div className="grid grid-cols-1 gap-3 lg:h-[calc(100svh-8.5rem)] lg:min-h-[620px] lg:grid-cols-[minmax(350px,410px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,0.58fr)_minmax(0,0.42fr)] lg:gap-5">
+          <aside className="order-1 lg:col-start-1 lg:row-start-1 lg:min-h-0">
+            <Card className="overflow-visible rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)] lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:overflow-hidden">
               <CardHeader className="border-b border-slate-100 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
                 <CardTitle className="text-base font-bold text-slate-900 sm:text-lg">店舗検索</CardTitle>
                 <p className="pt-1 text-xs leading-5 text-slate-500">
                   条件を指定すると、地図と店舗一覧に反映されます。
                 </p>
               </CardHeader>
-              <CardContent className="space-y-4 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
+              <CardContent className="space-y-4 px-4 pb-4 pt-4 sm:px-5 sm:pb-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                   <Input
@@ -1301,18 +1301,30 @@ export default function Home() {
               </CardContent>
             </Card>
           </section>
-          <aside className="order-3 lg:col-start-1 lg:row-start-2 lg:min-h-0">
+          <aside id="store-list" className="order-3 lg:col-start-1 lg:row-start-2 lg:min-h-0">
             <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
               <CardHeader className="border-b border-slate-100 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
-                <CardTitle className="text-base font-bold text-slate-900 sm:text-lg">
-                  店舗一覧{" "}
-                  <span className="text-xs sm:text-sm font-normal text-gray-500">
-                    (表示範囲 {visibleStores.length.toLocaleString()}件)
-                  </span>
-                </CardTitle>
-                <p className="pt-1 text-xs text-gray-500">
-                  地図を動かした後は「この範囲の店舗を表示」を押して一覧を更新できます。
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base font-bold text-slate-900 sm:text-lg">
+                      店舗一覧{" "}
+                      <span className="text-xs sm:text-sm font-normal text-gray-500">
+                        (表示範囲 {visibleStores.length.toLocaleString()}件)
+                      </span>
+                    </CardTitle>
+                    <p className="pt-1 text-xs text-gray-500">
+                      地図を動かした後は範囲内の店舗を更新できます。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyMapBoundsToList}
+                    disabled={!mapBounds || !hasUnappliedMapBounds}
+                    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${hasUnappliedMapBounds ? "bg-blue-600 text-white hover:bg-blue-700" : "border border-slate-200 bg-slate-50 text-slate-400"}`}
+                  >
+                    {hasUnappliedMapBounds ? "この範囲を表示" : "表示中"}
+                  </button>
+                </div>
                 {summary &&
                   filteredStores.length === 0 &&
                   !loading &&
