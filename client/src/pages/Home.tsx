@@ -57,9 +57,20 @@ interface GsiReverseGeocodeResponse {
 }
 
 interface StoreExtraInfo {
-  status: "loading" | "available" | "unavailable";
+  status:
+    | "loading"
+    | "available"
+    | "no-public-fields"
+    | "no-matching-place"
+    | "lookup-error";
   openingHours?: string;
   website?: string;
+}
+
+interface StoreExtraLookup {
+  openingHours?: string;
+  website?: string;
+  matchedPlace: boolean;
 }
 
 interface OverpassElement {
@@ -305,8 +316,8 @@ async function lookupNeighborhood(position: Coordinates) {
 async function lookupStoreExtraInfo(
   store: Store,
   position: Coordinates
-): Promise<Omit<StoreExtraInfo, "status">> {
-  const query = `[out:json][timeout:12];nwr(around:80,${position[0]},${position[1]})["name"];out center tags;`;
+): Promise<StoreExtraLookup> {
+  const query = `[out:json][timeout:12];nwr(around:140,${position[0]},${position[1]})["name"];out center tags;`;
   const response = await fetch(
     `${OVERPASS_API_URL}?data=${encodeURIComponent(query)}`
   );
@@ -338,6 +349,7 @@ async function lookupStoreExtraInfo(
   })[0];
   const tags = closestElement?.tags;
   return {
+    matchedPlace: Boolean(tags),
     openingHours: tags?.opening_hours?.trim(),
     website: getValidWebsiteUrl(
       tags?.website ?? tags?.["contact:website"] ?? tags?.url
@@ -827,7 +839,9 @@ export default function Home() {
         const result: StoreExtraInfo =
           extraInfo.openingHours || extraInfo.website
             ? { status: "available", ...extraInfo }
-            : { status: "unavailable" };
+            : extraInfo.matchedPlace
+              ? { status: "no-public-fields" }
+              : { status: "no-matching-place" };
         storeExtraInfoCacheRef.current.set(selectedStore.id, result);
         setStoreExtraInfo(previous => ({
           ...previous,
@@ -836,7 +850,7 @@ export default function Home() {
       })
       .catch(() => {
         if (isCancelled) return;
-        const result: StoreExtraInfo = { status: "unavailable" };
+        const result: StoreExtraInfo = { status: "lookup-error" };
         storeExtraInfoCacheRef.current.set(selectedStore.id, result);
         setStoreExtraInfo(previous => ({
           ...previous,
@@ -1472,7 +1486,11 @@ export default function Home() {
                       </p>
                     ) : (
                       <p className="mt-1 text-xs leading-5 text-slate-500">
-                        公開情報に営業時間の掲載がありません。来店前に店舗へご確認ください。
+                        {selectedStoreAdditionalInfo?.status === "no-matching-place"
+                          ? "近くの公開地図情報に、店舗名が一致する地点を確認できませんでした。"
+                          : selectedStoreAdditionalInfo?.status === "lookup-error"
+                            ? "公開地図情報を一時的に確認できませんでした。"
+                            : "照合できた公開地図情報には、営業時間が登録されていません。"}
                       </p>
                     )}
                   </div>
@@ -1499,14 +1517,40 @@ export default function Home() {
                       </a>
                     ) : (
                       <p className="mt-1 text-xs leading-5 text-slate-500">
-                        公開情報に公式サイトの掲載がありません。
+                        {selectedStoreAdditionalInfo?.status === "no-matching-place"
+                          ? "近くの公開地図情報に、店舗名が一致する地点を確認できませんでした。"
+                          : selectedStoreAdditionalInfo?.status === "lookup-error"
+                            ? "公開地図情報を一時的に確認できませんでした。"
+                            : "照合できた公開地図情報には、公式サイトが登録されていません。"}
                       </p>
                     )}
                   </div>
                 </div>
-                <p className="border-t border-slate-200 pt-2 text-[10px] leading-4 text-slate-500">
-                  営業時間・公式サイトはOpenStreetMapに掲載された公開情報を表示します。最新の内容は店舗へご確認ください。
-                </p>
+                <div className="border-t border-slate-200 pt-2.5">
+                  <p className="text-[10px] leading-4 text-slate-500">
+                    営業時間・公式サイトはCOIN+の店舗データには含まれないため、近くのOpenStreetMap公開情報で店舗名が一致した場合だけ表示します。最新情報は以下の確認先をご利用ください。
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${selectedStore.name} ${selectedStore.address}`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-center text-[11px] font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800"
+                    >
+                      <ExternalLink className="mr-1 h-3 w-3 shrink-0" />
+                      Google Mapsで確認
+                    </a>
+                    <a
+                      href="https://coinplus.jp/storesearch/all.html?region=%E9%96%A2%E8%A5%BF"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-h-8 items-center justify-center rounded-md border border-slate-200 bg-white px-2 text-center text-[11px] font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-800"
+                    >
+                      <ExternalLink className="mr-1 h-3 w-3 shrink-0" />
+                      公式COIN+検索
+                    </a>
+                  </div>
+                </div>
               </div>
               <div className="grid gap-2 sm:block sm:space-y-2">
                 <a
@@ -1516,7 +1560,7 @@ export default function Home() {
                   className="flex h-10 w-full items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-4 text-sm font-medium text-blue-700 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <ExternalLink className="w-4 h-4 mr-2" />
-                  Google Mapsで開く
+                  Google Mapsで店舗情報を確認
                 </a>
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&origin=My+Location&destination=${encodeURIComponent(`${selectedStore.name} ${selectedStore.address}`)}&travelmode=walking`}
