@@ -151,6 +151,19 @@ def main() -> None:
         zoom, x, y = (int(value) for value in overview_key.split("/"))
         genre_counts = Counter(store["genre"] for store in tile_stores)
         area_counts = Counter(store["area"] for store in tile_stores)
+        area_genre_counts = {
+            area: dict(
+                sorted(
+                    Counter(
+                        store["genre"]
+                        for store in tile_stores
+                        if store["area"] == area
+                    ).items()
+                )
+            )
+            for area in SCOPE
+            if area_counts.get(area)
+        }
         relative_path = f"tiles/overview/z{zoom}/{x}/{y}.json"
         write_json(
             args.output_dir / relative_path,
@@ -165,6 +178,7 @@ def main() -> None:
                 ],
                 "genreCounts": dict(sorted(genre_counts.items())),
                 "areaCounts": dict(sorted(area_counts.items())),
+                "areaGenreCounts": area_genre_counts,
             },
         )
         overview_index[overview_key] = relative_path
@@ -204,7 +218,15 @@ def main() -> None:
         args.output_dir / "search-index.json",
         {
             "entries": [
-                {"id": store["id"], "text": search_text(store), "tiles": store_tile_paths[store["id"]]}
+                {
+                    "id": store["id"],
+                    "name": store["name"],
+                    "address": store["address"],
+                    "area": store["area"],
+                    "genre": store["genre"],
+                    "text": search_text(store),
+                    "tiles": store_tile_paths[store["id"]],
+                }
                 for store in stores
             ]
         },

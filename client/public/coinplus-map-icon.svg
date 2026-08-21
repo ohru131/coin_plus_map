@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="COIN+ ストアマップ">
+  <rect width="512" height="512" rx="112" fill="#2563eb"/>
+  <path fill="#dbeafe" d="M93 132c0-19 15-34 34-34h258c19 0 34 15 34 34v248c0 19-15 34-34 34H127c-19 0-34-15-34-34V132Z"/>
+  <path fill="#2563eb" d="M135 166h242v37H135zm0 72h112v37H135zm0 72h112v37H135z"/>
+  <path fill="#ef4444" d="M317 221c-43 0-78 35-78 78 0 58 78 133 78 133s78-75 78-133c0-43-35-78-78-78Zm0 113a35 35 0 1 1 0-70 35 35 0 0 1 0 70Z"/>
+</svg>

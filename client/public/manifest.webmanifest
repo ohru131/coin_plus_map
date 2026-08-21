@@ -1,0 +1,19 @@
+{
+  "name": "COIN+ ストアマップ",
+  "short_name": "COIN+マップ",
+  "description": "京都市・大阪市・茨木市・高槻市のCOIN+利用可能店舗を検索する地図アプリです。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eff6ff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "coinplus-map-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

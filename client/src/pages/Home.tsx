@@ -14,7 +14,7 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 import { divIcon, type LatLngBounds, type Map as LeafletMap } from "leaflet";
 import { MapView } from "@/components/Map";
 import { useStoreTiles } from "@/hooks/useStoreTiles";
-import type { TileStore } from "@/lib/storeTiles";
+import type { SearchIndexEntry, TileStore } from "@/lib/storeTiles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +29,8 @@ import {
   RotateCcw,
   Search,
   SlidersHorizontal,
+  Smartphone,
+  WifiOff,
   X,
 } from "lucide-react";
 
@@ -356,8 +358,31 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
+function useOnlineStatus() {
+  const [isOnline, setIsOnline] = useState(
+    () => typeof navigator === "undefined" || navigator.onLine
+  );
+
+  useEffect(() => {
+    const markOnline = () => setIsOnline(true);
+    const markOffline = () => setIsOnline(false);
+    window.addEventListener("online", markOnline);
+    window.addEventListener("offline", markOffline);
+    return () => {
+      window.removeEventListener("online", markOnline);
+      window.removeEventListener("offline", markOffline);
+    };
+  }, []);
+
+  return isOnline;
+}
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSuggestionId, setSelectedSuggestionId] = useState<
+    string | null
+  >(null);
+  const [isSuggestionListOpen, setIsSuggestionListOpen] = useState(true);
   const [selectedArea, setSelectedArea] = useState<Area>("すべて");
   const [selectedGenres, setSelectedGenres] = useState<Set<GenreFilter>>(
     () => new Set()
@@ -383,10 +408,12 @@ export default function Home() {
   const locationRequestedRef = useRef(false);
   const storeExtraInfoCacheRef = useRef<Map<string, StoreExtraInfo>>(new Map());
   const isMobile = useMediaQuery("(max-width: 639px)");
+  const isOnline = useOnlineStatus();
   const {
     stores,
     summary,
     overviewTiles,
+    searchSuggestions,
     isLoading: loading,
     isLoadingTiles,
     message: tileMessage,
@@ -436,23 +463,31 @@ export default function Home() {
             selectedGenres.has(genreFilter.id) &&
             genreFilter.categories.includes(store.genre)
         );
-      return isInArea && isKeywordMatch && isGenreMatch;
+      return (
+        isInArea &&
+        isKeywordMatch &&
+        isGenreMatch &&
+        (!selectedSuggestionId || store.id === selectedSuggestionId)
+      );
     });
-  }, [searchQuery, selectedArea, selectedGenres, stores]);
+  }, [searchQuery, selectedArea, selectedGenres, selectedSuggestionId, stores]);
 
   const storesMatchingAreaAndKeyword = useMemo(() => {
     const keyword = searchQuery.trim().toLocaleLowerCase("ja-JP");
     return stores.filter(store => {
       const isInArea = selectedArea === "すべて" || store.area === selectedArea;
+      const isKeywordMatch =
+        !keyword ||
+        [store.name, store.address, store.city, store.genre].some(value =>
+          value.toLocaleLowerCase("ja-JP").includes(keyword)
+        );
       return (
         isInArea &&
-        (!keyword ||
-          [store.name, store.address, store.city, store.genre].some(value =>
-            value.toLocaleLowerCase("ja-JP").includes(keyword)
-          ))
+        isKeywordMatch &&
+        (!selectedSuggestionId || store.id === selectedSuggestionId)
       );
     });
-  }, [searchQuery, selectedArea, stores]);
+  }, [searchQuery, selectedArea, selectedSuggestionId, stores]);
 
   const genreCounts = useMemo(() => {
     const keyword = searchQuery.trim();
@@ -509,9 +544,31 @@ export default function Home() {
   const deferredMapBounds = useDeferredValue(mapBounds);
   const mapZoom = map?.getZoom() ?? 10;
   const isOverviewMode = mapZoom < 12;
+  const visibleOverviewTiles = useMemo(() => {
+    const selectedCategories = GENRE_FILTERS.filter(genreFilter =>
+      selectedGenres.has(genreFilter.id)
+    ).flatMap(genreFilter => genreFilter.categories);
+
+    return overviewTiles.flatMap(tile => {
+      const sourceCounts =
+        selectedArea === "すべて"
+          ? tile.genreCounts
+          : (tile.areaGenreCounts?.[selectedArea] ?? {});
+      const count =
+        selectedGenres.size === 0
+          ? selectedArea === "すべて"
+            ? tile.count
+            : (tile.areaCounts[selectedArea] ?? 0)
+          : selectedCategories.reduce(
+              (total, category) => total + (sourceCounts[category] ?? 0),
+              0
+            );
+      return count > 0 ? [{ ...tile, count }] : [];
+    });
+  }, [overviewTiles, selectedArea, selectedGenres]);
   const overviewStoreCount = useMemo(
-    () => overviewTiles.reduce((total, tile) => total + tile.count, 0),
-    [overviewTiles]
+    () => visibleOverviewTiles.reduce((total, tile) => total + tile.count, 0),
+    [visibleOverviewTiles]
   );
   const candidatePinStores = useMemo(() => {
     if (!deferredMapBounds) return coordinateStores;
@@ -638,6 +695,7 @@ export default function Home() {
   const showArea = useCallback(
     (area: Area) => {
       setSelectedArea(area);
+      setSelectedSuggestionId(null);
       setSelectedStore(null);
       if (!map) return;
       if (area === "すべて") {
@@ -650,6 +708,26 @@ export default function Home() {
       );
     },
     [map]
+  );
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    setSelectedSuggestionId(null);
+    setIsSuggestionListOpen(true);
+    setSelectedStore(null);
+    setLocationMessage("");
+  }, []);
+
+  const selectSearchSuggestion = useCallback(
+    (suggestion: SearchIndexEntry) => {
+      if (!suggestion.name) return;
+      setSearchQuery(suggestion.name);
+      setSelectedSuggestionId(suggestion.id);
+      setIsSuggestionListOpen(false);
+      setSelectedStore(null);
+      setLocationMessage(`${suggestion.name}の検索結果を表示しています。`);
+    },
+    []
   );
 
   const showStoreOnMap = useCallback(
@@ -796,6 +874,20 @@ export default function Home() {
         </div>
       </header>
 
+      {!isOnline && (
+        <div
+          role="status"
+          className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-amber-950"
+        >
+          <div className="mx-auto flex max-w-7xl items-start gap-2 text-xs leading-5 sm:text-sm">
+            <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <p>
+              オフラインです。以前に読み込んだアプリ画面と店舗データは表示できますが、新しい地域・地図画像・店舗情報の取得は通信回復後に行われます。
+            </p>
+          </div>
+        </div>
+      )}
+
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-[auto_1fr] gap-3 sm:gap-4 lg:gap-6">
           <aside className="order-1 lg:col-start-1 lg:row-start-1">
@@ -810,9 +902,43 @@ export default function Home() {
                     aria-label="店舗名・住所・ジャンルで検索"
                     placeholder="店舗名・住所・ジャンルで検索"
                     value={searchQuery}
-                    onChange={event => setSearchQuery(event.target.value)}
+                    onChange={event => handleSearchChange(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === "Escape") setIsSuggestionListOpen(false);
+                    }}
                     className="pl-9"
                   />
+                  {searchQuery.trim() &&
+                    !selectedSuggestionId &&
+                    isSuggestionListOpen &&
+                    searchSuggestions.length > 0 && (
+                      <div
+                        role="listbox"
+                        aria-label="店舗名の候補"
+                        className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-blue-100 bg-white p-1 shadow-lg"
+                      >
+                        <p className="px-2 py-1 text-[11px] font-medium text-slate-500">
+                          店舗名の候補
+                        </p>
+                        {searchSuggestions.map(suggestion => (
+                          <button
+                            key={suggestion.id}
+                            type="button"
+                            role="option"
+                            aria-selected={false}
+                            onClick={() => selectSearchSuggestion(suggestion)}
+                            className="block w-full rounded-md px-2 py-2 text-left transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          >
+                            <span className="block truncate text-sm font-semibold text-slate-800">
+                              {suggestion.name}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[11px] text-slate-500">
+                              {suggestion.area} · {suggestion.genre} · {suggestion.address}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                 </div>
                 <label
                   className="block text-xs font-medium text-gray-600"
@@ -898,6 +1024,15 @@ export default function Home() {
                     {locationMessage}
                   </p>
                 )}
+                <details className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-slate-600">
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 font-medium text-blue-800">
+                    <Smartphone className="h-3.5 w-3.5" />
+                    ホーム画面に追加して、通信が弱い場所でも使う
+                  </summary>
+                  <p className="pt-2 leading-5">
+                    SafariまたはChromeのメニューから「ホーム画面に追加」を選べます。一度表示したアプリ画面と店舗データは再利用できますが、未読込地域や地図画像は通信が必要です。
+                  </p>
+                </details>
               </CardContent>
             </Card>
           </aside>
@@ -916,7 +1051,7 @@ export default function Home() {
                   onBoundsChange={setMapBounds}
                 >
                   {(map?.getZoom() ?? 10) < 12 &&
-                    overviewTiles.map(tile => (
+                    visibleOverviewTiles.map(tile => (
                       <CircleMarker
                         key={`overview-${tile.z}-${tile.x}-${tile.y}`}
                         center={tile.center}
@@ -1030,12 +1165,12 @@ export default function Home() {
                     <MapPin className="w-3.5 h-3.5 text-blue-600" />
                     <span className="sm:hidden">
                       {isOverviewMode
-                        ? `${overviewTiles.length}地域`
+                        ? `${visibleOverviewTiles.length}地域`
                         : `${mapPinStores.length.toLocaleString()}件`}
                     </span>
                     <span className="hidden sm:inline">
                       {isOverviewMode
-                        ? `${overviewTiles.length}地域・${overviewStoreCount.toLocaleString()}件を集約表示`
+                        ? `${visibleOverviewTiles.length}地域・${overviewStoreCount.toLocaleString()}件を集約表示`
                         : `${mapPinStores.length.toLocaleString()} / ${candidatePinStores.length.toLocaleString()}件を描画`}
                     </span>
                   </p>

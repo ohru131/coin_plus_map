@@ -11,6 +11,7 @@ import {
   overviewTilePathsForBounds,
   type OverviewTile,
   type SearchIndex,
+  type SearchIndexEntry,
   type TileCache,
   type TileIndex,
   type TileManifest,
@@ -73,6 +74,9 @@ export function useStoreTiles({
   const [overviewTiles, setOverviewTiles] = useState<Map<string, OverviewTile>>(
     () => new Map()
   );
+  const [searchSuggestions, setSearchSuggestions] = useState<
+    SearchIndexEntry[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingTiles, setIsLoadingTiles] = useState(false);
   const [message, setMessage] = useState("");
@@ -263,10 +267,14 @@ export function useStoreTiles({
 
   useEffect(() => {
     const keyword = normalizeSearchText(searchQuery);
-    if (!runtime || !keyword) return;
+    if (!runtime || !keyword) {
+      setSearchSuggestions([]);
+      return;
+    }
     const controller = new AbortController();
     searchRequestRef.current?.abort();
     searchRequestRef.current = controller;
+    setSearchSuggestions([]);
     const timer = window.setTimeout(() => {
       const loadSearchMatches = async () => {
         try {
@@ -277,11 +285,17 @@ export function useStoreTiles({
             );
           }
           if (controller.signal.aborted) return;
+          const matchedEntries = searchIndexRef.current.entries.filter(entry =>
+            entry.text.includes(keyword)
+          );
+          setSearchSuggestions(
+            matchedEntries
+              .filter(entry => typeof entry.name === "string")
+              .slice(0, 8)
+          );
           const matchedPaths = Array.from(
             new Set(
-              searchIndexRef.current.entries
-                .filter(entry => entry.text.includes(keyword))
-                .flatMap(entry => entry.tiles)
+              matchedEntries.flatMap(entry => entry.tiles)
             )
           );
           await loadDetailTiles(matchedPaths, controller.signal);
@@ -310,6 +324,7 @@ export function useStoreTiles({
     stores,
     summary: runtime?.summary ?? null,
     overviewTiles: Array.from(overviewTiles.values()),
+    searchSuggestions,
     isTileMode: Boolean(runtime),
     isLoading,
     isLoadingTiles,

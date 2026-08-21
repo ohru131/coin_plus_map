@@ -66,10 +66,21 @@ export interface OverviewTile {
   center: Coordinates;
   genreCounts: Record<string, number>;
   areaCounts: Record<string, number>;
+  areaGenreCounts?: Record<string, Record<string, number>>;
+}
+
+export interface SearchIndexEntry {
+  id: string;
+  name?: string;
+  address?: string;
+  area?: TileStore["area"];
+  genre?: string;
+  text: string;
+  tiles: string[];
 }
 
 export interface SearchIndex {
-  entries: Array<{ id: string; text: string; tiles: string[] }>;
+  entries: SearchIndexEntry[];
 }
 
 interface CompactStoreTile {
