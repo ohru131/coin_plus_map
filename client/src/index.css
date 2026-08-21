@@ -133,7 +133,7 @@
   }
 }
 
-/* Leaflet controls, popups, and marker clusters keep the blue-forward map language consistent. */
+/* Design: 「地図を主役にするコマンドデスク」。地図の操作部は白い案内標識のように簡潔に扱う。 */
 .leaflet-container {
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #e8eff5;
@@ -152,6 +152,31 @@
   background-color: #2563eb;
   color: white;
   font-weight: 700;
+}
+
+@media (min-width: 1024px) {
+  .leaflet-control-zoom {
+    margin-top: 1rem;
+    margin-left: 1rem;
+    overflow: hidden;
+    border: 1px solid rgb(226 232 240 / 90%);
+    border-radius: 0.75rem;
+    box-shadow: 0 6px 18px rgb(15 23 42 / 12%);
+  }
+
+  .leaflet-control-zoom a {
+    width: 34px;
+    height: 34px;
+    line-height: 32px;
+    color: #0f172a;
+  }
+
+  .leaflet-control-attribution {
+    margin: 0 0.75rem 0.75rem 0;
+    border-radius: 0.5rem;
+    background: rgb(255 255 255 / 88%);
+    padding: 2px 5px;
+  }
 }
 
 /* Mobile map surfaces reserve the viewport for pins; detail content moves to the app-level bottom sheet. */

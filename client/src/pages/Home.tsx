@@ -1,5 +1,6 @@
 /**
- * Design: 明快な白地とCOIN+ブルーで、モバイルでも現在地・ジャンル・個別店舗を迷わず辿れるLeaflet地図画面。
+ * Design: 「地図を主役にするコマンドデスク」。PCでは検索と結果を左の探索レールへ集約し、
+ * 右の広い地図ステージで地理的文脈を保つ。COIN+ブルーは主要操作と選択状態だけに使う。
  */
 import {
   useCallback,
@@ -859,16 +860,16 @@ export default function Home() {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex flex-col">
-      <header className="bg-white/95 shadow-sm border-b border-gray-100 sticky top-0 z-40 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
-          <div className="flex items-center gap-2 mb-1 sm:mb-2">
-            <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 flex-shrink-0" />
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900">
+    <div className="min-h-screen bg-[#f4f7fb] flex flex-col">
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.03)] backdrop-blur">
+        <div className="mx-auto max-w-[1600px] px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2 mb-1">
+            <MapPin className="h-5 w-5 shrink-0 text-blue-600 sm:h-6 sm:w-6" />
+            <h1 className="text-lg font-bold tracking-tight text-slate-950 sm:text-2xl">
               COIN+ ストア マップ
             </h1>
           </div>
-          <p className="text-[11px] leading-4 sm:text-sm text-gray-600 ml-7 sm:ml-8">
+          <p className="ml-7 text-[11px] leading-4 text-slate-500 sm:ml-8 sm:text-sm">
             京都市・大阪市・茨木市・高槻市のCOIN+利用可能店舗を検索
           </p>
         </div>
@@ -879,7 +880,7 @@ export default function Home() {
           role="status"
           className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-amber-950"
         >
-          <div className="mx-auto flex max-w-7xl items-start gap-2 text-xs leading-5 sm:text-sm">
+          <div className="mx-auto flex max-w-[1600px] items-start gap-2 text-xs leading-5 sm:px-6 sm:text-sm lg:px-8">
             <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
             <p>
               オフラインです。以前に読み込んだアプリ画面と店舗データは表示できますが、新しい地域・地図画像・店舗情報の取得は通信回復後に行われます。
@@ -888,14 +889,17 @@ export default function Home() {
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-[auto_1fr] gap-3 sm:gap-4 lg:gap-6">
+      <main className="flex-1 w-full max-w-[1600px] mx-auto px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
+        <div className="grid grid-cols-1 gap-3 lg:h-[calc(100svh-8.5rem)] lg:min-h-[620px] lg:grid-cols-[minmax(350px,410px)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-5">
           <aside className="order-1 lg:col-start-1 lg:row-start-1">
-            <Card className="shadow-md border-0">
-              <CardHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6 sm:pb-3">
-                <CardTitle className="text-base sm:text-lg">店舗検索</CardTitle>
+            <Card className="overflow-visible rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
+              <CardHeader className="border-b border-slate-100 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
+                <CardTitle className="text-base font-bold text-slate-900 sm:text-lg">店舗検索</CardTitle>
+                <p className="pt-1 text-xs leading-5 text-slate-500">
+                  条件を指定すると、地図と店舗一覧に反映されます。
+                </p>
               </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3 sm:px-6 sm:pb-6">
+              <CardContent className="space-y-4 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                   <Input
@@ -906,7 +910,7 @@ export default function Home() {
                     onKeyDown={event => {
                       if (event.key === "Escape") setIsSuggestionListOpen(false);
                     }}
-                    className="pl-9"
+                    className="h-11 rounded-lg border-slate-200 bg-slate-50/50 pl-9 shadow-none focus-visible:bg-white"
                   />
                   {searchQuery.trim() &&
                     !selectedSuggestionId &&
@@ -951,7 +955,7 @@ export default function Home() {
                   aria-label="対象エリア"
                   value={selectedArea}
                   onChange={event => showArea(event.target.value as Area)}
-                  className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 >
                   {AREA_OPTIONS.map(area => (
                     <option key={area} value={area}>
@@ -980,7 +984,7 @@ export default function Home() {
                     件数は現在のエリア・キーワード条件に連動します。複数選択したジャンルはいずれかに該当する店舗を表示します。
                   </p>
                   <div
-                    className="mt-2 grid grid-cols-2 gap-2"
+                    className="mt-2.5 grid grid-cols-2 gap-2"
                     role="group"
                     aria-label="ジャンルを複数選択"
                   >
@@ -992,11 +996,11 @@ export default function Home() {
                           type="button"
                           aria-pressed={isSelected}
                           onClick={() => toggleGenre(genreFilter.id)}
-                          className={`min-h-9 rounded-md border px-2 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isSelected ? "border-blue-600 bg-blue-600 text-white shadow-sm" : "border-blue-200 bg-blue-50/60 text-blue-800 hover:border-blue-400 hover:bg-blue-100"}`}
+                          className={`min-h-10 rounded-lg border px-2 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isSelected ? "border-blue-600 bg-blue-600 text-white shadow-sm" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800"}`}
                         >
                           <span className="truncate">{genreFilter.label}</span>
                           <span
-                            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${isSelected ? "bg-white/20 text-white" : "bg-white text-blue-700"}`}
+                            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${isSelected ? "bg-white/20 text-white" : "bg-white text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.08)]"}`}
                           >
                             {genreCounts
                               .get(genreFilter.id)
@@ -1010,7 +1014,7 @@ export default function Home() {
                 <Button
                   onClick={() => requestUserLocation(false)}
                   disabled={isLocating}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  className="h-11 w-full rounded-lg bg-blue-600 text-white shadow-sm hover:bg-blue-700"
                 >
                   {isLocating ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1020,11 +1024,11 @@ export default function Home() {
                   現在地周辺を優先表示
                 </Button>
                 {locationMessage && (
-                  <p className="text-xs leading-5 text-blue-700 bg-blue-50 rounded-md px-3 py-2">
+                  <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
                     {locationMessage}
                   </p>
                 )}
-                <details className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-slate-600">
+                  <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                   <summary className="flex cursor-pointer list-none items-center gap-1.5 font-medium text-blue-800">
                     <Smartphone className="h-3.5 w-3.5" />
                     ホーム画面に追加して、通信が弱い場所でも使う
@@ -1038,10 +1042,10 @@ export default function Home() {
           </aside>
 
           <section
-            className="order-2 h-[52svh] min-h-[350px] max-h-[520px] lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-[calc(100vh-9.5rem)] lg:min-h-[560px] lg:max-h-none"
+            className="order-2 h-[52svh] min-h-[350px] max-h-[520px] lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-full lg:min-h-0 lg:max-h-none"
             aria-label="店舗マップ"
           >
-            <Card className="shadow-md border-0 h-full overflow-hidden">
+            <Card className="h-full overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
               <CardContent className="p-0 h-full relative">
                 <MapView
                   className="w-full h-full rounded-lg"
@@ -1160,8 +1164,9 @@ export default function Home() {
                     </CircleMarker>
                   )}
                 </MapView>
-                <div className="absolute top-3 right-3 z-[500] rounded-lg border border-white/80 bg-white/95 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                <div className="absolute right-4 top-4 z-[500] flex max-w-[calc(100%-2rem)] flex-col items-end gap-2">
+                  <div className="rounded-xl border border-white/90 bg-white/95 px-3 py-2 shadow-md backdrop-blur-sm">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
                     <MapPin className="w-3.5 h-3.5 text-blue-600" />
                     <span className="sm:hidden">
                       {isOverviewMode
@@ -1199,29 +1204,30 @@ export default function Home() {
                       ピンを追加中
                     </p>
                   )}
-                  {hasDeferredPins && !isPinRendering && (
+                    {hasDeferredPins && !isPinRendering && (
                     <p className="mt-1 hidden text-[10px] text-slate-500 sm:block">
                       拡大すると追加表示
                     </p>
                   )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyMapBoundsToList}
+                    disabled={!mapBounds || !hasUnappliedMapBounds}
+                    className={`rounded-full px-3 py-2 text-[11px] font-bold shadow-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${hasUnappliedMapBounds ? "border border-blue-600 bg-blue-600 text-white hover:bg-blue-700" : "border border-white/90 bg-white/95 text-slate-500"}`}
+                  >
+                    <span className="sm:hidden">
+                      {hasUnappliedMapBounds
+                        ? "この範囲を表示"
+                        : "この範囲を表示中"}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {hasUnappliedMapBounds
+                        ? "この範囲の店舗を表示"
+                        : "この範囲の店舗を表示中"}
+                    </span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={applyMapBoundsToList}
-                  disabled={!mapBounds || !hasUnappliedMapBounds}
-                  className={`absolute top-14 right-3 z-[500] rounded-full px-3 py-2 text-[11px] font-bold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${hasUnappliedMapBounds ? "border border-blue-600 bg-blue-600 text-white hover:bg-blue-700" : "border border-white/80 bg-white/95 text-slate-500"}`}
-                >
-                  <span className="sm:hidden">
-                    {hasUnappliedMapBounds
-                      ? "この範囲を表示"
-                      : "この範囲を表示中"}
-                  </span>
-                  <span className="hidden sm:inline">
-                    {hasUnappliedMapBounds
-                      ? "この範囲の店舗を表示"
-                      : "この範囲の店舗を表示中"}
-                  </span>
-                </button>
                 <button
                   type="button"
                   onClick={() => setMobileLegendOpen(open => !open)}
@@ -1255,7 +1261,7 @@ export default function Home() {
                   </div>
                 )}
                 <div
-                  className="absolute bottom-3 left-3 z-[500] hidden max-w-[calc(100%-1.5rem)] rounded-lg border border-white/80 bg-white/95 px-3 py-2 shadow-sm backdrop-blur-sm sm:block"
+                  className="absolute bottom-4 left-4 z-[500] hidden max-w-[calc(100%-2rem)] rounded-xl border border-white/90 bg-white/95 px-3.5 py-2.5 shadow-md backdrop-blur-sm sm:block"
                   aria-label="ピンのジャンル別凡例"
                 >
                   <p className="mb-1 text-[10px] font-semibold tracking-wide text-slate-500">
@@ -1282,9 +1288,9 @@ export default function Home() {
             </Card>
           </section>
           <aside className="order-3 lg:col-start-1 lg:row-start-2 lg:min-h-0">
-            <Card className="shadow-md border-0 flex flex-col">
-              <CardHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6 sm:pb-3">
-                <CardTitle className="text-base sm:text-lg">
+            <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
+              <CardHeader className="border-b border-slate-100 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
+                <CardTitle className="text-base font-bold text-slate-900 sm:text-lg">
                   店舗一覧{" "}
                   <span className="text-xs sm:text-sm font-normal text-gray-500">
                     (表示範囲 {visibleStores.length.toLocaleString()}件)
@@ -1309,8 +1315,8 @@ export default function Home() {
                   </p>
                 )}
               </CardHeader>
-              <CardContent className="px-3 pb-3 sm:px-6 sm:pb-6">
-                <div className="space-y-1 overflow-y-auto pr-1 max-h-[42svh] lg:max-h-[calc(100vh-23rem)]">
+              <CardContent className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-3 sm:px-4 sm:pb-4">
+                <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 max-h-[42svh] lg:max-h-none">
                   {loading ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
@@ -1330,7 +1336,7 @@ export default function Home() {
                         <button
                           key={store.id}
                           onClick={() => void showStoreOnMap(store)}
-                          className={`w-full text-left p-3 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${selectedStore?.id === store.id ? "bg-blue-100 border-l-4 border-blue-600" : "hover:bg-gray-50 border-l-4 border-transparent"}`}
+                          className={`w-full rounded-lg border-l-4 p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${selectedStore?.id === store.id ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50"}`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <p className="font-semibold text-sm text-gray-900 truncate">
