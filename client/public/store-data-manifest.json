@@ -1,7 +1,10 @@
 {
-  "schemaVersion": 1,
-  "version": "20260818",
-  "updatedAt": "2026-08-18T11:43:51Z",
-  "datasetPath": "/manus-storage/coinplus-stores-20260818_95baed87.json",
-  "sourceSnapshot": "2026-08-18"
+  "schemaVersion": 2,
+  "version": "2026-08-21-9d913b009495",
+  "updatedAt": "2026-08-21T00:54:23Z",
+  "sourceSnapshot": "2026-08-21",
+  "tileDatasetPath": "https://ohru131.github.io/coin_plus_map/data/coinplus-tiles-2026-08-21_9d913b009495",
+  "summaryPath": "https://ohru131.github.io/coin_plus_map/data/coinplus-tiles-2026-08-21_9d913b009495/summary.json",
+  "tileIndexPath": "https://ohru131.github.io/coin_plus_map/data/coinplus-tiles-2026-08-21_9d913b009495/tile-index.json",
+  "searchIndexPath": "https://ohru131.github.io/coin_plus_map/data/coinplus-tiles-2026-08-21_9d913b009495/search-index.json"
 }

@@ -217,6 +217,7 @@ export function decodeStoreTile(payload: CompactStoreTile): TileStore[] {
 }
 
 function resolveDataUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
   const basePath = import.meta.env.BASE_URL ?? "/";
   return new URL(
     path.replace(/^\/+/, ""),

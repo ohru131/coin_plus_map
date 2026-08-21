@@ -1,4 +1,4 @@
-const APP_CACHE = "coinplus-app-shell-v1";
+const APP_CACHE = "coinplus-app-shell-v2";
 const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./coinplus-map-icon.svg"];
 
 self.addEventListener("install", event => {
@@ -7,7 +7,22 @@ self.addEventListener("install", event => {
 });
 
 self.addEventListener("activate", event => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then(cacheNames =>
+        Promise.all(
+          cacheNames
+            .filter(
+              cacheName =>
+                cacheName.startsWith("coinplus-app-shell-") &&
+                cacheName !== APP_CACHE
+            )
+            .map(cacheName => caches.delete(cacheName))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener("fetch", event => {
